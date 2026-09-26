@@ -24,14 +24,20 @@ export function listedAge(iso: string): string {
 
 /** How an item changes hands, phrased as the "price" line of a listing. */
 export const OFFER_LABEL: Record<ExchangeType, string> = {
+  sell: "For sale",
   exchange: "Swap",
   donation: "Free",
+  repair: "Repair",
+  recycle: "Recycle",
   pickup: "Free pickup",
 };
 
 export const EXCHANGE_TYPE_LABEL: Record<ExchangeType, string> = {
+  sell: "Sale",
   exchange: "Exchange",
   donation: "Donation",
+  repair: "Repair",
+  recycle: "Recycling",
   pickup: "Pickup",
 };
 

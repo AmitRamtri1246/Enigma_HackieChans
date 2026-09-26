@@ -12,11 +12,12 @@ export interface PendingScan {
   file: File;
   previewUrl: string;
   analysis: MaterialAnalysis;
+  imageDataUrl?: string;
 }
 
 interface ScanContextType {
   pending: PendingScan | null;
-  setPending: (scan: { file: File; previewUrl: string; analysis: MaterialAnalysis }) => void;
+  setPending: (scan: { file: File; analysis: MaterialAnalysis; imageDataUrl?: string }) => void;
   clear: () => void;
 }
 
@@ -27,16 +28,16 @@ export const ScanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const urlRef = useRef<string | null>(null);
 
   const setPending = useCallback(
-    (scan: { file: File; previewUrl: string; analysis: MaterialAnalysis }) => {
+    (scan: { file: File; analysis: MaterialAnalysis; imageDataUrl?: string }) => {
       // Revoke any previously held URL that we own and are replacing.
-      if (urlRef.current && urlRef.current !== scan.previewUrl) {
+      if (urlRef.current) {
         URL.revokeObjectURL(urlRef.current);
       }
       // Re-create a fresh, context-owned object URL so lifetime is independent
       // of the scanner component that produced the capture.
       const ownedUrl = URL.createObjectURL(scan.file);
       urlRef.current = ownedUrl;
-      setPendingState({ file: scan.file, previewUrl: ownedUrl, analysis: scan.analysis });
+      setPendingState({ file: scan.file, previewUrl: ownedUrl, analysis: scan.analysis, imageDataUrl: scan.imageDataUrl });
     },
     []
   );

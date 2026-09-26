@@ -16,6 +16,8 @@
 
 import type {
   CommunityActivity,
+  Community,
+  CommunityMembership,
   ExchangeRequest,
   ImpactSummary,
   ItemCondition,
@@ -24,6 +26,7 @@ import type {
   Material,
   MaterialCategory,
   MaterialListing,
+  MarketplacePurchase,
   MaterialOutcome,
   OrganizationNeed,
   PickupTask,
@@ -33,16 +36,24 @@ import type {
   User,
   WastePassport,
   ExchangeType,
+  PurchaseFeeBreakdown,
+  PickupPreference,
+  UnsoldReview,
+  UnsoldReviewOutcome,
 } from "./domain";
 import { JOURNEY_STAGES } from "./domain";
 import { IMAGES, getMarketplaceImage } from "@/data/images";
+import { OFFER_LABEL } from "./format";
 
 /* ============================ Persistence ============================= */
 
-const STORAGE_KEY = "traceiq.circularity.v2";
+const STORAGE_KEY = "traceiq.circularity.v3";
 const CHANGE_EVENT = "traceiq:circularity-change";
 
 interface DemoState {
+  communities: Community[];
+  memberships: CommunityMembership[];
+  activeCommunityId: string;
   listings: MaterialListing[];
   needs: OrganizationNeed[];
   matches: Match[];
@@ -51,6 +62,26 @@ interface DemoState {
   bins: SmartBin[];
   passports: WastePassport[];
   community: CommunityActivity[];
+  purchases: MarketplacePurchase[];
+  unsoldReviews: UnsoldReview[];
+}
+
+const DEFAULT_COMMUNITY_ID = "green-acres-society";
+const REVIEW_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const SELLER_FEE_RATE = 2 as const;
+
+export function calculateSellerFee(price: number): PurchaseFeeBreakdown {
+  const sellerFee = Math.round(price * SELLER_FEE_RATE) / 100;
+  return {
+    listingId: "",
+    listedPrice: price,
+    sellerFeeRate: SELLER_FEE_RATE,
+    sellerFee,
+    sellerPayout: Math.round((price - sellerFee) * 100) / 100,
+    buyerPays: price,
+    currency: "INR",
+    simulated: true,
+  };
 }
 
 function clone<T>(v: T): T {
@@ -94,7 +125,103 @@ function buildTimeline(reached: number): TimelineEvent[] {
 }
 
 function seed(): DemoState {
+  const communities: Community[] = [
+    {
+      id: "green-acres-society",
+      name: "Green Acres Housing Society",
+      type: "housing_society",
+      area: "Riverside",
+      description: "A resident-led reuse network for Green Acres and nearby blocks.",
+      memberCount: 184,
+      adminName: "Nisha Patel",
+    },
+    {
+      id: "riverside-rotary",
+      name: "Riverside Rotary & Neighbourhood Circle",
+      type: "local_association",
+      area: "Old Town · Harbor View",
+      description: "A local association connecting neighbours, workshops, and reuse partners.",
+      memberCount: 327,
+      adminName: "Daniel Brooks",
+    },
+  ];
+  const memberships: CommunityMembership[] = communities.map((community) => ({
+    id: `membership-alex-${community.id}`,
+    communityId: community.id,
+    userId: CURRENT_USER.id,
+    memberName: CURRENT_USER.fullName,
+    role: "member",
+    joinedAt: iso(36),
+  }));
+
   const listings: MaterialListing[] = [
+    {
+      id: "lst-sofa-review",
+      title: "Three-seat teakwood sofa",
+      material: "Solid wood furniture",
+      category: "Furniture",
+      description: "Sturdy teak frame with washable covers. Ready for a new living room.",
+      condition: "Good",
+      weight: "42 kg",
+      quantity: "1 unit",
+      exchangeType: "sell",
+      area: "Green Acres, Building C",
+      status: "Needs community review",
+      matchPercent: null,
+      owner: "Meera Shah",
+      createdAt: iso(8),
+      communityId: "green-acres-society",
+      price: "₹1,000",
+      priceAmount: 1000,
+      pickupPreference: "Buyer pickup",
+      imageUrl: IMAGES.marketplace.furniture.url,
+      imageAlt: IMAGES.marketplace.furniture.alt,
+      passportId: "wp-sofa-review",
+    },
+    {
+      id: "lst-society-lamp-sale",
+      title: "Adjustable study lamp",
+      material: "Metal and electronics",
+      category: "Electronics",
+      description: "Working LED task lamp; a few surface marks, no wiring issues.",
+      condition: "Good",
+      weight: "2 kg",
+      quantity: "1 unit",
+      exchangeType: "sell",
+      area: "Green Acres, Tower A",
+      status: "Listed",
+      matchPercent: null,
+      owner: "Priya Nair",
+      createdAt: iso(1),
+      communityId: "green-acres-society",
+      price: "₹350",
+      priceAmount: 350,
+      pickupPreference: "Coordinate locally",
+      imageUrl: IMAGES.marketplace.lamp.url,
+      imageAlt: IMAGES.marketplace.lamp.alt,
+    },
+    {
+      id: "lst-association-cycle-sale",
+      title: "Children's cycle, 20-inch",
+      material: "Bicycle",
+      category: "Sports equipment",
+      description: "Recently serviced; suitable for a growing rider.",
+      condition: "Fair",
+      weight: "9 kg",
+      quantity: "1 unit",
+      exchangeType: "sell",
+      area: "Old Town, Cedar Lane",
+      status: "Listed",
+      matchPercent: null,
+      owner: "Arjun Rao",
+      createdAt: iso(2),
+      communityId: "riverside-rotary",
+      price: "₹800",
+      priceAmount: 800,
+      pickupPreference: "Seller pickup",
+      imageUrl: IMAGES.marketplace.bicycle.url,
+      imageAlt: IMAGES.marketplace.bicycle.alt,
+    },
     {
       id: "lst-chair",
       title: "Ergonomic mesh office chair",
@@ -365,6 +492,14 @@ function seed(): DemoState {
       price: "Donation",
     },
   ];
+
+  listings.forEach((listing) => {
+    if (!listing.communityId) {
+      listing.communityId = listing.area.startsWith("Riverside")
+        ? "green-acres-society"
+        : "riverside-rotary";
+    }
+  });
 
   const needs: OrganizationNeed[] = [
     {
@@ -767,6 +902,20 @@ function seed(): DemoState {
 
   const passports: WastePassport[] = [
     {
+      id: "wp-sofa-review",
+      material: "Three-seat teakwood sofa",
+      category: "Furniture",
+      quantity: "42 kg",
+      owner: "Meera Shah",
+      currentStage: "Listed",
+      timeline: buildTimeline(0),
+      co2eEstimate: 37.8,
+      diverted: "42 kg",
+      listingId: "lst-sofa-review",
+      imageUrl: IMAGES.marketplace.furniture.url,
+      imageAlt: IMAGES.marketplace.furniture.alt,
+    },
+    {
       id: "wp-chair",
       material: "Office chair",
       category: "Furniture",
@@ -812,14 +961,35 @@ function seed(): DemoState {
   ];
 
   const community: CommunityActivity[] = [
-    { id: "ca-1", actor: "Priya N.", actorType: "Resident", kind: "offer", material: "Glass jars", when: "20m ago" },
-    { id: "ca-2", actor: "EcoPack", actorType: "Organization", kind: "request", material: "PET Plastic", when: "1h ago" },
-    { id: "ca-3", actor: "Marco T.", actorType: "Resident", kind: "reused", material: "Bookshelf", when: "3h ago" },
-    { id: "ca-4", actor: "Re-Volt Recyclers", actorType: "Organization", kind: "request", material: "Small electronics", when: "5h ago" },
-    { id: "ca-5", actor: "Dana K.", actorType: "Resident", kind: "joined", material: "", when: "Yesterday" },
+    { id: "ca-1", actor: "Priya N.", actorType: "Resident", kind: "offer", material: "Glass jars", when: "20m ago", communityId: DEFAULT_COMMUNITY_ID },
+    { id: "ca-2", actor: "EcoPack", actorType: "Organization", kind: "request", material: "PET Plastic", when: "1h ago", communityId: "riverside-rotary" },
+    { id: "ca-3", actor: "Marco T.", actorType: "Resident", kind: "reused", material: "Bookshelf", when: "3h ago", communityId: DEFAULT_COMMUNITY_ID },
+    { id: "ca-4", actor: "Re-Volt Recyclers", actorType: "Organization", kind: "request", material: "Small electronics", when: "5h ago", communityId: "riverside-rotary" },
+    { id: "ca-5", actor: "Dana K.", actorType: "Resident", kind: "joined", material: "", when: "Yesterday", communityId: DEFAULT_COMMUNITY_ID },
+    { id: "ca-sofa-review", actor: "Meera Shah", actorType: "Resident", kind: "sale", material: "Three-seat teakwood sofa", when: "8 days ago", communityId: DEFAULT_COMMUNITY_ID },
   ];
 
-  return { listings, needs, matches, requests, tasks, bins, passports, community };
+  return {
+    communities,
+    memberships,
+    activeCommunityId: DEFAULT_COMMUNITY_ID,
+    listings,
+    needs,
+    matches,
+    requests,
+    tasks,
+    bins,
+    passports,
+    community,
+    purchases: [],
+    unsoldReviews: [{
+      id: "review-sofa-review",
+      listingId: "lst-sofa-review",
+      communityId: DEFAULT_COMMUNITY_ID,
+      enteredReviewAt: iso(0),
+      status: "pending",
+    }],
+  };
 }
 
 /* ============================= State access ============================ */
@@ -829,14 +999,59 @@ function seed(): DemoState {
  * `persist()` — it runs during the module-level `state` initializer, so `state`
  * is still in its temporal dead zone. Seeding is persisted separately below.
  */
-function load(): { data: DemoState; fromStorage: boolean } {
+function load(): { data: DemoState; needsPersist: boolean } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { data: JSON.parse(raw) as DemoState, fromStorage: true };
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const saved = parsed as Partial<DemoState>;
+        const defaults = seed();
+        const isLegacy = !Array.isArray(saved.communities);
+        const data = { ...defaults, ...saved } as DemoState;
+
+        // Preserve older demo activity while supplying fields introduced by
+        // the community marketplace. A previous version may have used the same
+        // storage key but did not contain any community data.
+        if (isLegacy) {
+          const listings = Array.isArray(saved.listings) ? saved.listings : defaults.listings;
+          const seededSales = defaults.listings.filter((item) => item.exchangeType === "sell");
+          const missingSales = seededSales.filter((item) => !listings.some((existing) => existing.id === item.id));
+          data.listings = [...missingSales, ...listings];
+
+          const passports = Array.isArray(saved.passports) ? saved.passports : defaults.passports;
+          const saleIds = new Set(missingSales.map((item) => item.id));
+          const missingPassports = defaults.passports.filter((item) => saleIds.has(item.listingId ?? ""));
+          data.passports = [...missingPassports, ...passports];
+          data.community = Array.isArray(saved.community) ? saved.community : defaults.community;
+          data.community = [
+            ...defaults.community.filter((item) => item.kind === "sale" && !data.community.some((existing) => existing.id === item.id)),
+            ...data.community,
+          ];
+        }
+
+        data.communities = Array.isArray(data.communities) && data.communities.length ? data.communities : defaults.communities;
+        data.memberships = Array.isArray(data.memberships) ? data.memberships : defaults.memberships;
+        data.activeCommunityId = data.communities.some((item) => item.id === data.activeCommunityId)
+          ? data.activeCommunityId
+          : defaults.activeCommunityId;
+        data.purchases = Array.isArray(data.purchases) ? data.purchases : defaults.purchases;
+        data.unsoldReviews = Array.isArray(data.unsoldReviews) ? data.unsoldReviews : defaults.unsoldReviews;
+        data.listings = Array.isArray(data.listings) ? data.listings : defaults.listings;
+        data.passports = Array.isArray(data.passports) ? data.passports : defaults.passports;
+        data.community = Array.isArray(data.community) ? data.community : defaults.community;
+        data.needs = Array.isArray(data.needs) ? data.needs : defaults.needs;
+        data.matches = Array.isArray(data.matches) ? data.matches : defaults.matches;
+        data.requests = Array.isArray(data.requests) ? data.requests : defaults.requests;
+        data.tasks = Array.isArray(data.tasks) ? data.tasks : defaults.tasks;
+        data.bins = Array.isArray(data.bins) ? data.bins : defaults.bins;
+        return { data, needsPersist: isLegacy };
+      }
+    }
   } catch {
     // fall through to seed
   }
-  return { data: seed(), fromStorage: false };
+  return { data: seed(), needsPersist: true };
 }
 
 const initial = load();
@@ -844,7 +1059,7 @@ let state: DemoState = initial.data;
 
 // Persist the freshly-seeded state now that `state` is initialized. Skipped
 // when we loaded existing data from storage.
-if (!initial.fromStorage) {
+if (initial.needsPersist) {
   persist(state);
 }
 
@@ -866,6 +1081,69 @@ function mutate(fn: (draft: DemoState) => void): void {
   const draft = clone(state);
   fn(draft);
   persist(draft);
+}
+
+function refreshUnsoldReviewQueue(): void {
+  const draft = clone(state);
+  let changed = false;
+  for (const listing of draft.listings) {
+    const createdAt = Date.parse(listing.createdAt);
+    if (listing.exchangeType !== "sell" || listing.status !== "Listed" || !Number.isFinite(createdAt)) continue;
+    if (Date.now() - createdAt < REVIEW_AFTER_MS) continue;
+    listing.status = "Needs community review";
+    if (!draft.unsoldReviews.some((review) => review.listingId === listing.id)) {
+      draft.unsoldReviews.unshift({
+        id: uid("review"),
+        listingId: listing.id,
+        communityId: listing.communityId ?? draft.activeCommunityId,
+        enteredReviewAt: new Date().toISOString(),
+        status: "pending",
+      });
+    }
+    changed = true;
+  }
+  if (changed) persist(draft);
+}
+
+function addMarketplaceTimelineEvent(
+  draft: DemoState,
+  listing: MaterialListing,
+  stage: "Sold" | "Community buy-in" | "Auction queued" | "Recycler handoff",
+  actor: string,
+  outcome?: MaterialOutcome
+): void {
+  const passport = draft.passports.find((item) => item.listingId === listing.id);
+  if (!passport) return;
+  const now = new Date().toISOString();
+  if (stage !== "Auction queued") {
+    passport.currentStage = "Completed";
+    passport.timeline = passport.timeline.map((event) => ({
+      ...event,
+      done: true,
+      date: event.date || now,
+    }));
+  }
+  passport.timeline.push({ id: uid("evt"), stage, actor, date: now, done: true });
+  if (outcome) passport.outcome = outcome;
+}
+
+function addCommunityActivity(
+  draft: DemoState,
+  communityId: string,
+  actor: string,
+  actorType: CommunityActivity["actorType"],
+  kind: CommunityActivity["kind"],
+  material: string
+): void {
+  draft.community.unshift({
+    id: uid("activity"),
+    actor,
+    actorType,
+    kind,
+    material,
+    when: "Just now",
+    communityId,
+  });
 }
 
 /** Subscribe to any change in demo state. Returns an unsubscribe function. */
@@ -901,9 +1179,48 @@ export const circularityService = {
     return delay(CURRENT_USER, 120);
   },
 
+  getCommunities(): Promise<Community[]> {
+    return delay(state.communities);
+  },
+
+  getActiveCommunity(): Promise<Community> {
+    const communities = Array.isArray(state.communities) ? state.communities : seed().communities;
+    const active = communities.find((item) => item.id === state.activeCommunityId) ?? communities[0];
+    return delay(active);
+  },
+
+  setActiveCommunity(communityId: string): void {
+    if (!state.communities.some((item) => item.id === communityId) || state.activeCommunityId === communityId) return;
+    mutate((draft) => { draft.activeCommunityId = communityId; });
+  },
+
+  getCommunityMemberships(communityId = state.activeCommunityId): Promise<CommunityMembership[]> {
+    return delay(state.memberships.filter((membership) => membership.communityId === communityId));
+  },
+
   /* ------- Materials / listings (GET|POST|PATCH|DELETE /materials) ------- */
   getListings(): Promise<MaterialListing[]> {
     return delay(state.listings);
+  },
+
+  getMyListings(): Promise<MaterialListing[]> {
+    return delay(state.listings.filter((listing) => listing.owner === CURRENT_USER.fullName));
+  },
+
+  getCommunityListings(communityId = state.activeCommunityId): Promise<MaterialListing[]> {
+    refreshUnsoldReviewQueue();
+    return delay(state.listings.filter((listing) => listing.communityId === communityId));
+  },
+
+  getUnsoldReviews(communityId = state.activeCommunityId): Promise<UnsoldReview[]> {
+    refreshUnsoldReviewQueue();
+    return delay(state.unsoldReviews
+      .filter((review) => review.communityId === communityId && review.status === "pending")
+      .sort((a, b) => Date.parse(a.enteredReviewAt) - Date.parse(b.enteredReviewAt)));
+  },
+
+  getMarketplacePurchases(communityId = state.activeCommunityId): Promise<MarketplacePurchase[]> {
+    return delay(state.purchases.filter((purchase) => purchase.communityId === communityId));
   },
 
   getListing(id: string): Promise<MaterialListing | null> {
@@ -919,6 +1236,11 @@ export const circularityService = {
     weight: string;
     exchangeType: ExchangeType;
     area: string;
+    communityId?: string;
+    priceAmount?: number;
+    pickupPreference?: PickupPreference;
+    imageUrl?: string;
+    imageAlt?: string;
   }): Promise<MaterialListing> {
     const img = getMarketplaceImage(input.material || input.title);
     const listing: MaterialListing = {
@@ -936,9 +1258,14 @@ export const circularityService = {
       matchPercent: null,
       owner: CURRENT_USER.fullName,
       createdAt: iso(0),
-      imageUrl: img.url,
-      imageAlt: img.alt,
-      price: input.exchangeType === "donation" ? "Free" : "Exchange",
+      imageUrl: input.imageUrl ?? img.url,
+      imageAlt: input.imageAlt ?? img.alt,
+      communityId: input.communityId ?? state.activeCommunityId,
+      priceAmount: input.exchangeType === "sell" ? input.priceAmount : undefined,
+      pickupPreference: input.pickupPreference ?? "Coordinate locally",
+      price: input.exchangeType === "sell"
+        ? `₹${(input.priceAmount ?? 0).toLocaleString("en-IN")}`
+        : OFFER_LABEL[input.exchangeType],
     };
     const passport: WastePassport = {
       id: uid("wp"),
@@ -951,14 +1278,16 @@ export const circularityService = {
       co2eEstimate: estimateCo2e(input.category, input.weight),
       diverted: input.weight,
       listingId: listing.id,
-      imageUrl: img.url,
-      imageAlt: img.alt,
+      imageUrl: input.imageUrl ?? img.url,
+      imageAlt: input.imageAlt ?? img.alt,
     };
     listing.passportId = passport.id;
     mutate((d) => {
       // Match the new listing against active organization needs so it shows
       // up in the organization's Matches (core demo lifecycle).
-      const need = d.needs.find((n) => n.status === "Active" && n.category === input.category);
+      const need = input.exchangeType === "sell"
+        ? undefined
+        : d.needs.find((n) => n.status === "Active" && n.category === input.category);
       if (need) {
         listing.status = "Matched";
         listing.matchPercent = 88;
@@ -988,9 +1317,10 @@ export const circularityService = {
         id: uid("ca"),
         actor: CURRENT_USER.fullName,
         actorType: "Resident",
-        kind: "offer",
+        kind: input.exchangeType === "sell" ? "sale" : "offer",
         material: input.material,
         when: "Just now",
+        communityId: listing.communityId,
       });
     });
     return delay(listing, 480);
@@ -1009,6 +1339,118 @@ export const circularityService = {
       d.listings = d.listings.filter((l) => l.id !== id);
     });
     return delay(undefined as void);
+  },
+
+  createMarketplaceListing(input: {
+    title: string;
+    material: string;
+    category: MaterialCategory;
+    description: string;
+    condition: ItemCondition;
+    weight: string;
+    area: string;
+    priceAmount: number;
+    pickupPreference: PickupPreference;
+    imageUrl?: string;
+  }): Promise<MaterialListing> {
+    if (!Number.isFinite(input.priceAmount) || input.priceAmount <= 0) {
+      return Promise.reject(new Error("Enter a sale price above ₹0."));
+    }
+    return circularityService.createListing({ ...input, exchangeType: "sell" });
+  },
+
+  completeSimulatedPurchase(listingId: string): Promise<MarketplacePurchase> {
+    const listing = state.listings.find((item) => item.id === listingId);
+    if (!listing || listing.exchangeType !== "sell" || listing.status !== "Listed") {
+      return Promise.reject(new Error("This item is no longer available."));
+    }
+    if (listing.communityId !== state.activeCommunityId) {
+      return Promise.reject(new Error("This item is not listed in the active community."));
+    }
+    if (listing.owner === CURRENT_USER.fullName) {
+      return Promise.reject(new Error("You cannot purchase your own listing."));
+    }
+    const isMember = state.memberships.some((membership) => membership.communityId === listing.communityId && membership.userId === CURRENT_USER.id);
+    if (!isMember) return Promise.reject(new Error("Join this community before purchasing its listings."));
+    const breakdown = calculateSellerFee(listing.priceAmount ?? 0);
+    breakdown.listingId = listing.id;
+    const purchase: MarketplacePurchase = {
+      id: uid("purchase"),
+      listingId: listing.id,
+      communityId: listing.communityId ?? state.activeCommunityId,
+      buyerId: CURRENT_USER.id,
+      buyerName: CURRENT_USER.fullName,
+      sellerId: `seller-${listing.owner.toLowerCase().replace(/\s+/g, "-")}`,
+      sellerName: listing.owner,
+      breakdown,
+      purchasedAt: new Date().toISOString(),
+      communityBuyIn: false,
+    };
+    mutate((draft) => {
+      const current = draft.listings.find((item) => item.id === listingId);
+      if (!current || current.status !== "Listed") return;
+      current.status = "Sold";
+      draft.purchases.unshift(purchase);
+      const activeCommunity = draft.communities.find((item) => item.id === current.communityId);
+      addMarketplaceTimelineEvent(draft, current, "Sold", CURRENT_USER.fullName, "Reused");
+      addCommunityActivity(draft, current.communityId ?? draft.activeCommunityId, CURRENT_USER.fullName, "Resident", "purchase", current.title);
+      if (activeCommunity) addCommunityActivity(draft, activeCommunity.id, listing.owner, "Resident", "sale", current.title);
+    });
+    return delay(purchase, 520);
+  },
+
+  resolveUnsoldReview(reviewId: string, outcome: UnsoldReviewOutcome): Promise<void> {
+    refreshUnsoldReviewQueue();
+    const review = state.unsoldReviews.find((item) => item.id === reviewId && item.status === "pending");
+    if (!review) return Promise.reject(new Error("This review is no longer available."));
+    const listing = state.listings.find((item) => item.id === review.listingId);
+    const community = state.communities.find((item) => item.id === review.communityId);
+    if (!listing || !community) return Promise.reject(new Error("The listing or community could not be found."));
+
+    let purchase: MarketplacePurchase | undefined;
+    if (outcome === "community_buy_in") {
+      const breakdown = calculateSellerFee(listing.priceAmount ?? 0);
+      breakdown.listingId = listing.id;
+      purchase = {
+        id: uid("buyin"),
+        listingId: listing.id,
+        communityId: community.id,
+        buyerId: community.id,
+        buyerName: community.name,
+        sellerId: `seller-${listing.owner.toLowerCase().replace(/\s+/g, "-")}`,
+        sellerName: listing.owner,
+        breakdown,
+        purchasedAt: new Date().toISOString(),
+        communityBuyIn: true,
+      };
+    }
+
+    mutate((draft) => {
+      const currentReview = draft.unsoldReviews.find((item) => item.id === reviewId);
+      const currentListing = draft.listings.find((item) => item.id === review.listingId);
+      if (!currentReview || currentReview.status !== "pending" || !currentListing) return;
+      currentReview.status = "resolved";
+      currentReview.outcome = outcome;
+      currentReview.decidedAt = new Date().toISOString();
+      currentReview.decidedBy = community.adminName;
+
+      if (outcome === "community_buy_in" && purchase) {
+        currentListing.status = "Community buy-in";
+        draft.purchases.unshift(purchase);
+        addMarketplaceTimelineEvent(draft, currentListing, "Community buy-in", community.adminName, "Reused");
+        addCommunityActivity(draft, community.id, community.adminName, "Community Admin", "community_buy_in", currentListing.title);
+      } else if (outcome === "auction_queue") {
+        currentListing.status = "Auction queued";
+        addMarketplaceTimelineEvent(draft, currentListing, "Auction queued", community.adminName);
+        addCommunityActivity(draft, community.id, community.adminName, "Community Admin", "auction", currentListing.title);
+      } else {
+        currentListing.status = "Recycler handoff";
+        currentListing.exchangeType = "recycle";
+        addMarketplaceTimelineEvent(draft, currentListing, "Recycler handoff", community.adminName, "Recycled");
+        addCommunityActivity(draft, community.id, community.adminName, "Community Admin", "recycler_handoff", currentListing.title);
+      }
+    });
+    return delay(undefined as void, 520);
   },
 
   /* ------- Scan (POST /scan/analyze) ------- */
@@ -1037,7 +1479,7 @@ export const circularityService = {
       stream: selected.stream,
       confidence: selected.confidence,
       circularity: selected.circularity,
-      suggestedActions: ["exchange", "donation", "pickup"],
+      suggestedActions: ["sell", "exchange", "donation", "repair", "recycle", "pickup"],
       imageUrl: selected.url,
       imageAlt: selected.alt,
     };
@@ -1259,7 +1701,7 @@ export const circularityService = {
 
   /* ------- Community ------- */
   getCommunityActivity(): Promise<CommunityActivity[]> {
-    return delay(state.community);
+    return delay(state.community.filter((activity) => !activity.communityId || activity.communityId === state.activeCommunityId));
   },
 
   /* ------- Map (mock discovery) ------- */
@@ -1310,6 +1752,8 @@ function estimateCo2e(category: MaterialCategory, weight: string): number {
     Textile: 1.1,
     Glass: 0.25,
     Organic: 0.15,
+    "Sports equipment": 0.7,
+    "Household items": 0.6,
   };
   return Math.round(kg * (factor[category] ?? 0.4) * 10) / 10;
 }

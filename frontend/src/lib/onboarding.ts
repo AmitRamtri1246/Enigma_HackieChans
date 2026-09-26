@@ -6,7 +6,7 @@
  * Do not use these values to gate anything sensitive.
  */
 
-export type TraceRole = "citizen" | "organization" | "collector" | "municipality";
+export type TraceRole = "citizen" | "organization" | "collector" | "municipality" | "community_admin";
 
 export interface OnboardingProfile {
   role: TraceRole;

@@ -1,7 +1,7 @@
 /**
  * Scan service — the single abstraction the UI uses to analyze a captured
- * item image. It attempts the backend vision endpoint first and transparently
- * falls back to a deterministic local mock when the backend is unavailable.
+ * item image. Real scans go through the backend vision endpoint; demo output
+ * is available only when a caller explicitly forces the mock.
  *
  * The UI must NOT know whether a result came from the real service or the mock.
  * No AI provider keys ever live in the frontend — the backend owns that.
@@ -37,9 +37,8 @@ export interface AnalyzeOptions {
 
 export const scanService = {
   /**
-   * Analyze a captured image and return a typed MaterialAnalysis. Tries the
-   * backend; on network/HTTP failure, falls back to the local mock so the
-   * prototype keeps working end-to-end.
+   * Analyze a captured image and return a typed MaterialAnalysis. Provider or
+   * network errors are surfaced instead of silently presenting a static item.
    */
   async analyzeMaterial(image: File, options: AnalyzeOptions = {}): Promise<MaterialAnalysis> {
     if (options.forceMock) {
@@ -59,12 +58,15 @@ export const scanService = {
         // Do NOT set Content-Type; the browser sets the multipart boundary.
       });
 
-      if (!res.ok) throw new Error(`Analyze failed with ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { detail?: string } | null;
+        throw new Error(body?.detail ?? `Vision analysis failed (${res.status}).`);
+      }
       const data = (await res.json()) as MaterialAnalysis;
       return normalize(data);
-    } catch {
-      // Backend not available (common in the prototype) — use the local mock.
-      return mockAnalyze(image);
+    } catch (error) {
+      if (error instanceof Error) throw error;
+      throw new Error("Could not reach the vision service. Check that the backend is running.");
     }
   },
 
@@ -153,15 +155,22 @@ async function mockAnalyze(image: File): Promise<MaterialAnalysis> {
   const p = matchProfile((image.name || "").toLowerCase());
   return {
     materialName: p.materialName,
+    subtype: p.category,
+    description: `A ${p.condition.toLowerCase()}-condition ${p.materialName.toLowerCase()} identified from the image.`,
+    stream: p.category === "Plastic" || p.category === "Cardboard" ? "Dry Recyclable" : "Reusable",
     category: p.category,
     condition: p.condition,
     confidence: p.confidence,
     circularityScore: p.circularityScore,
     suggestedActions: p.suggestedActions,
     recommendedAction: p.recommendedAction,
+    recommendationRationale: p.recommendedAction === "recycle" ? "Material recovery is the most suitable route for this item." : "Keeping this item useful avoids premature disposal.",
+    recommendedUse: p.recommendedAction === "recycle" ? "Prepare it for a local material-recovery stream." : "Offer it to someone nearby who can keep using it.",
+    alternativeRecommendations: ["Check whether a neighbour or local reuse group needs it.", "If it is damaged, consider repair before recycling."],
     preparationGuidance: p.preparationGuidance,
     estimatedWeightKg: p.estimatedWeightKg,
     matches: [],
+    analysisSource: "demo",
   };
 }
 
@@ -170,15 +179,22 @@ function normalize(data: Partial<MaterialAnalysis>): MaterialAnalysis {
   const actions = (data.suggestedActions ?? []).filter(Boolean) as ScanAction[];
   return {
     materialName: data.materialName ?? "Unknown item",
+    subtype: data.subtype ?? data.category ?? "Unclassified material",
+    description: data.description ?? "Review the item details and edit this draft before publishing.",
+    stream: data.stream ?? "Reuse assessment",
     category: (data.category ?? "Plastic") as MaterialCategory,
     condition: (data.condition ?? "Good") as ItemCondition,
     confidence: clamp01(data.confidence ?? 0.8),
     circularityScore: clampScore(data.circularityScore ?? 70),
     suggestedActions: actions.length ? actions : ["recycle"],
     recommendedAction: data.recommendedAction ?? actions[0],
+    recommendationRationale: data.recommendationRationale ?? "Choose the route that gives this item the most useful next life.",
+    recommendedUse: data.recommendedUse ?? "Offer it for reuse, repair, exchange, or material recovery.",
+    alternativeRecommendations: data.alternativeRecommendations ?? [],
     preparationGuidance: data.preparationGuidance ?? [],
     estimatedWeightKg: Math.max(0, data.estimatedWeightKg ?? 1),
     matches: data.matches ?? [],
+    analysisSource: data.analysisSource ?? "gemini",
   };
 }
 

@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CircularityRing } from "@/components/common/CircularityRing";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { SCAN_ACTIONS, type MaterialAnalysis, type ScanAction } from "@/lib/domain";
+import { SCAN_ACTIONS, type ItemCondition, type MaterialAnalysis, type ScanAction } from "@/lib/domain";
 import {
   Tag,
   Repeat,
@@ -18,7 +20,7 @@ import {
 interface ScanResultProps {
   analysis: MaterialAnalysis;
   previewUrl: string;
-  onAction: (action: ScanAction) => void;
+  onAction: (action: ScanAction, details: { condition: ItemCondition; weightKg: number }) => void;
   onRetake: () => void;
 }
 
@@ -36,7 +38,19 @@ const ACTION_META: Record<ScanAction, { label: string; icon: LucideIcon; blurb: 
  * options remain available.
  */
 export const ScanResult: React.FC<ScanResultProps> = ({ analysis, previewUrl, onAction, onRetake }) => {
+  const [condition, setCondition] = useState<ItemCondition | "">("");
+  const [weightKg, setWeightKg] = useState("");
+  const [detailsError, setDetailsError] = useState(false);
   const recommended = analysis.recommendedAction;
+
+  const chooseAction = (action: ScanAction) => {
+    const parsedWeight = Number(weightKg);
+    if (!condition || !Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+      setDetailsError(true);
+      return;
+    }
+    onAction(action, { condition, weightKg: parsedWeight });
+  };
 
   return (
     <div className="mx-auto w-full max-w-2xl">
@@ -59,9 +73,7 @@ export const ScanResult: React.FC<ScanResultProps> = ({ analysis, previewUrl, on
                 dot={false}
               />
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {analysis.category} · {analysis.condition} condition
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{analysis.category} · Review the details before choosing a route</p>
 
             <div className="mt-4 flex items-center gap-4">
               <CircularityRing value={analysis.circularityScore} label="Circularity" size={72} />
@@ -71,9 +83,7 @@ export const ScanResult: React.FC<ScanResultProps> = ({ analysis, previewUrl, on
                   <Info className="h-3 w-3" />
                   Illustrative estimate
                 </p>
-                <p className="mt-0.5 text-xs">
-                  Est. weight <span className="font-mono text-foreground/80">{analysis.estimatedWeightKg} kg</span>
-                </p>
+                <p className="mt-0.5 text-xs">Score is illustrative; weight is entered by you below.</p>
               </div>
             </div>
           </div>
@@ -96,6 +106,39 @@ export const ScanResult: React.FC<ScanResultProps> = ({ analysis, previewUrl, on
         )}
       </div>
 
+      <section className="mt-4 rounded-2xl border border-border bg-card p-4 sm:p-5" aria-labelledby="item-details-title">
+        <h3 id="item-details-title" className="text-sm font-semibold text-foreground">Add item details</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Your estimate helps the next owner or recycler plan. AI does not fill these in.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5 text-sm font-medium text-foreground" htmlFor="scan-condition">
+            Condition <span aria-hidden="true" className="text-destructive">*</span>
+            <Select id="scan-condition" required value={condition} onChange={(event) => { setCondition(event.target.value as ItemCondition | ""); setDetailsError(false); }} options={[{ value: "", label: "Choose condition" }, ...["New", "Good", "Fair", "For parts"].map((item) => ({ value: item, label: item }))]} />
+          </label>
+          <label className="space-y-1.5 text-sm font-medium text-foreground" htmlFor="scan-weight">
+            Approximate weight (kg) <span aria-hidden="true" className="text-destructive">*</span>
+            <Input id="scan-weight" type="number" inputMode="decimal" min="0.01" step="0.01" required value={weightKg} onChange={(event) => { setWeightKg(event.target.value); setDetailsError(false); }} placeholder="e.g. 2.5" />
+          </label>
+        </div>
+        {detailsError && <p className="mt-2 text-sm text-destructive" role="alert">Choose a condition and enter a weight greater than 0 kg before continuing.</p>}
+      </section>
+
+      <section className="mt-4 rounded-2xl border border-brand-sage/40 bg-brand-soft/35 p-4 sm:p-5" aria-labelledby="scan-recommendation-title">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 id="scan-recommendation-title" className="text-sm font-semibold text-brand-forest">Recommended next step</h3>
+          <StatusBadge label={analysis.analysisSource === "demo" ? "Demo estimate" : "Gemini vision"} tone="neutral" dot={false} />
+        </div>
+        <p className="mt-2 text-sm leading-6 text-foreground">{analysis.recommendationRationale}</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground"><span className="font-medium text-foreground">A useful next use:</span> {analysis.recommendedUse}</p>
+        {analysis.alternativeRecommendations.length > 0 && (
+          <div className="mt-4 border-t border-brand-sage/25 pt-3">
+            <p className="text-xs font-medium text-muted-foreground">Other options to consider</p>
+            <ul className="mt-2 space-y-1.5">
+              {analysis.alternativeRecommendations.map((recommendation) => <li key={recommendation} className="flex gap-2 text-sm leading-5 text-foreground/85"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-brand-sage" aria-hidden="true" />{recommendation}</li>)}
+            </ul>
+          </div>
+        )}
+      </section>
+
       {/* Circular pathways */}
       <div className="mt-6">
         <h3 className="text-base font-semibold tracking-tight text-foreground">
@@ -111,7 +154,7 @@ export const ScanResult: React.FC<ScanResultProps> = ({ analysis, previewUrl, on
               key={action}
               action={action}
               recommended={action === recommended}
-              onSelect={() => onAction(action)}
+              onSelect={() => chooseAction(action)}
             />
           ))}
         </div>

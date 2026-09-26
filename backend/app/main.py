@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routes.auth import router as auth_router
 from app.routes.scan import router as scan_router
+from app.routes.scans import router as scans_router
+from app.routes.listings import router as listings_router
 
 app = FastAPI(title="TraceIQ API")
 
@@ -24,6 +26,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(scan_router)
+app.include_router(scans_router)
+app.include_router(listings_router)
 
 @app.get("/")
 def health_check():

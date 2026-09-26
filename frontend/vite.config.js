@@ -12,6 +12,8 @@ export default defineConfig({
     server: {
         port: 5173,
         host: true,
+        // Set NGROK_HOST to the assigned tunnel hostname when presenting from a phone.
+        allowedHosts: process.env.NGROK_HOST ? [process.env.NGROK_HOST] : [],
         proxy: {
             '/api': {
                 target: 'http://127.0.0.1:8000',

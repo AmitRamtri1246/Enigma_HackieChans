@@ -18,6 +18,7 @@ export const ROLE_LABELS: Record<TraceRole, string> = {
   organization: "Organization",
   collector: "Collector",
   municipality: "Municipality",
+  community_admin: "Community Admin",
 };
 
 /**

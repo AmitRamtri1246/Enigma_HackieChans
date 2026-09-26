@@ -1,72 +1,57 @@
-# TraceIQ — Sustainability Intelligence Platform
+# TraceIQ — Circular Economy Platform
 
-A reusable hackathon starter project providing an environmental intelligence platform to help organizations measure impact, diagnose operational drivers, and make verified reduction decisions.
+TraceIQ is an Enigma 5.0 sustainability-track prototype for keeping useful materials in circulation through local reuse, exchange, collection, and recycling.
 
-## Architecture
+Read [HACKATHON_CONTEXT.md](HACKATHON_CONTEXT.md) for the product direction and current demo scope, [FRONTEND_IMPLEMENTATION_PROMPT.md](FRONTEND_IMPLEMENTATION_PROMPT.md) for a copy-ready frontend handoff, and [AGENTS.md](AGENTS.md) for repository conventions.
 
-- **Frontend**: React 18 + Vite + TypeScript
-- **Styling**: Tailwind CSS with custom sustainability design system tokens
-- **Component Foundation**: Radix UI + shadcn/ui patterns (`Button`, `Input`, `Label`, `Checkbox`, `Badge`, `Card`)
-- **Iconography**: Lucide React
-- **Routing**: React Router DOM (`/`, `/login`, `/signup`)
-- **Backend (Upcoming phase)**: FastAPI & PostgreSQL ready
+## Stack
 
----
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, React Router.
+- **Backend:** FastAPI with PyMongo and MongoDB.
+- **Authentication:** bcrypt password hashes and JWT in an HttpOnly cookie.
+- **Demo data:** Circular-economy frontend workflows use seeded mock data; the backend has user persistence, saved scans, and Gemini vision analysis with structured recommendations. Marketplace and Community Admin changes persist in browser localStorage only.
 
-## Visual Identity & Design Tokens
+## Run locally
 
-Designed around an authentic sustainability SaaS aesthetic without generic AI templates or ungrounded claims:
-- **Palette**:
-  - `Mineral Slate`: Deep architectural charcoal (`#0E1513`)
-  - `Warm Stone / Sand`: Unbleached natural canvas (`#FAF8F5`, `#EFECE6`)
-  - `Deep Forest`: Evergreen corporate grounding (`#163326`)
-  - `Calibrated Sage & Emerald`: Precise telemetry accents (`#2D6A4F`, `#059669`)
-- **Typography**: Inter (sans-serif) for high-contrast clarity + JetBrains Mono for units (`tCO2e`, `%`, kWh)
-- **Hierarchy**: Restrained 1px borders, subtle hairline grids, and generous whitespace.
+### Frontend
 
----
+From the repository root:
 
-## Core Routes & Functionality
-
-### 1. Landing Page (`/`)
-- **Hero**: Clean editorial value proposition with immediate CTAs to `/signup` and `/login`.
-- **Core Triad (Measure → Understand → Act)**:
-  - *01 / Measure*: Continuous portfolio impact tracking and verified baselines.
-  - *02 / Understand*: Driver & cause diagnostics distinguishing volume from efficiency shifts.
-  - *03 / Act*: Prioritized reduction pathways and decarbonization roadmaps.
-- **Interactive Reduction Preview**: Live sector selector (Manufacturing, Logistics, Data Operations) with an efficiency improvement slider and real-time avoided emissions calculations.
-- **Conversion Section**: Direct pathway into organization onboarding.
-
-### 2. Authentication UI (`/login` & `/signup`)
-- **Responsive Split Layout (`AuthLayout`)**: Left column houses high-focus auth inputs; right column visualizes the sustainability workflow and telemetry metrics.
-- **Login (`/login`)**:
-  - Work email and password fields with inline validation.
-  - "Keep this device authenticated for 30 days" checkbox.
-  - Interactive "Forgot password" modal.
-  - Quick UI demo presets to test valid credentials and error alert states.
-- **Signup (`/signup`)**:
-  - Full name, work email, password, and password confirmation.
-  - Dynamic password strength meter evaluating length, uppercase, numbers, and special symbols.
-  - Terms and privacy agreement checkbox.
-  - Interactive UI demo presets (Valid, Mismatch, Error banner).
-  - Provisioning success state with verification confirmation screen.
-
----
-
-## Getting Started
-
-### Development
 ```bash
-# From root directory:
+npm install --prefix frontend
 npm run dev
-
-# Or directly in frontend:
-cd frontend
-npm run dev
-```
-
-### Production Build & Typecheck
-```bash
-# Runs TypeScript compiler (tsc -b) and Vite production bundler
 npm run build
 ```
+
+### Backend
+
+Start a local MongoDB server (or use a hosted MongoDB URI), then from `backend/`:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
+
+Set `MONGODB_URI`, `MONGODB_DATABASE`, a strong `JWT_SECRET_KEY`, and `GEMINI_API_KEY` in `backend/.env`. `GEMINI_MODEL` defaults to `gemini-3.8-flash` and can be changed if your Google AI Studio project uses another available model. Defaults target local MongoDB at `mongodb://localhost:27017` and database `traceiq`. The Vite development server proxies `/api` to `http://127.0.0.1:8000`.
+
+## API routes
+
+- `GET /` — API health response.
+- `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout` — cookie-based authentication.
+- `POST /api/scan/analyze` — authenticated multipart image analysis through Gemini; returns structured item fields, recommended circular action, rationale, and alternatives. The API key stays in the backend environment.
+- `POST /api/scans`, `GET /api/scans`, `GET /api/scans/{scan_id}` — persist and retrieve the authenticated user's scans.
+
+User and scan IDs are MongoDB ObjectIds serialized as strings. The backend creates the required unique email and per-user scan indexes on demand. MongoDB has no Alembic migration step.
+
+Run the database-backed auth and scan smoke test from `backend/` with MongoDB available:
+
+```bash
+python test_auth_flow.py
+```
+
+## Important prototype limitations
+
+The PostgreSQL-to-MongoDB backend switch does not copy existing PostgreSQL data. Marketplace checkout is simulated; there are no real payments, auction bids, or marketplace API endpoints. Live location services, smart-bin hardware, and verified carbon accounting are not implemented. AI confidence, condition, weight, and circularity suggestions are estimates and should be reviewed before publishing. See the hackathon context for current frontend behavior and future integrations.

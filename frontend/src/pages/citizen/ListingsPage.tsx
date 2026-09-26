@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmationDialog } from "@/components/common/ConfirmationDialog";
 import { ChoiceGroup, FormField } from "@/components/common/FormField";
 import { useToast } from "@/components/common/ToastProvider";
+import { useScan } from "@/contexts/ScanContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -21,12 +22,15 @@ import { circularityService } from "@/lib/circularity-service";
 import { EXCHANGE_TYPE_LABEL, formatDate } from "@/lib/format";
 import type { ExchangeType, ItemCondition, MaterialCategory, MaterialListing } from "@/lib/domain";
 import { FileText, Loader2, MoreHorizontal, Package, Pencil, Plus, XCircle } from "lucide-react";
+import { createBackendListing, resolveListingImage } from "@/lib/listing-service";
 
-const CATEGORIES: MaterialCategory[] = ["Plastic", "Cardboard", "Metal", "Electronics", "Furniture", "Textile", "Glass", "Organic"];
+const CATEGORIES: MaterialCategory[] = ["Plastic", "Cardboard", "Metal", "Electronics", "Furniture", "Textile", "Glass", "Organic", "Sports equipment", "Household items"];
 const CONDITIONS: ItemCondition[] = ["New", "Good", "Fair", "For parts"];
 const TYPES: { value: ExchangeType; label: string }[] = [
   { value: "exchange", label: "Exchange" },
   { value: "donation", label: "Donation" },
+  { value: "repair", label: "Repair" },
+  { value: "recycle", label: "Recycle" },
   { value: "pickup", label: "Pickup" },
 ];
 
@@ -36,8 +40,9 @@ const closed = (l: MaterialListing) => l.status === "Completed" || l.status === 
 export const ListingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const scan = useScan();
   const [params, setParams] = useSearchParams();
-  const listings = useAsync(() => circularityService.getListings());
+  const listings = useAsync(() => circularityService.getMyListings());
 
   const [sheet, setSheet] = useState<{ open: boolean; editing?: MaterialListing }>({ open: false });
   const [cancelTarget, setCancelTarget] = useState<MaterialListing | null>(null);
@@ -67,7 +72,7 @@ export const ListingsPage: React.FC = () => {
       id: "item",
       header: "Item",
       mobile: "primary",
-      cell: (l) => <ItemCell category={l.category} title={l.title} sub={l.material} />,
+      cell: (l) => <ItemCell category={l.category} title={l.title} sub={l.material} imageUrl={l.imageUrl} imageAlt={l.imageAlt} />,
     },
     { id: "qty", header: "Quantity", cell: (l) => <span className="font-mono">{l.quantity}</span> },
     { id: "type", header: "Type", mobile: "hidden", cell: (l) => <span className="text-muted-foreground">{EXCHANGE_TYPE_LABEL[l.exchangeType]}</span> },
@@ -134,9 +139,9 @@ export const ListingsPage: React.FC = () => {
       <PageContainer>
         <PageHeader
           title="My Listings"
-          subtitle="Items you've published for exchange, donation or pickup."
+          subtitle="Track your exchanges, donations, repairs, recycling, and community sale listings."
           action={
-            <Button className="gap-2" onClick={() => setSheet({ open: true })}>
+            <Button className="gap-2" onClick={() => navigate("/marketplace?new=1")}>
               <Plus className="h-4 w-4" />
               New listing
             </Button>
@@ -152,7 +157,7 @@ export const ListingsPage: React.FC = () => {
             icon={Package}
             title="No listings yet."
             description="Publish something you no longer need to give it a second life."
-            action={<Button size="sm" onClick={() => setSheet({ open: true })}>New listing</Button>}
+            action={<Button size="sm" onClick={() => navigate("/marketplace?new=1")}>List an item for sale</Button>}
           />
         ) : (
           <DataTable
@@ -173,6 +178,7 @@ export const ListingsPage: React.FC = () => {
           onClose={() => setSheet({ open: false })}
           onSaved={(created) => {
             setSheet({ open: false });
+            if (created) scan.clear();
             toast(created ? "Listing published. Matching organizations can now see it." : "Listing updated.");
           }}
         />
@@ -198,6 +204,7 @@ export const ListingsPage: React.FC = () => {
 interface Errors {
   title?: string;
   material?: string;
+  condition?: string;
   weight?: string;
 }
 
@@ -207,14 +214,25 @@ const ListingSheet: React.FC<{
   onClose: () => void;
   onSaved: (created: boolean) => void;
 }> = ({ open, editing, onClose, onSaved }) => {
-  const [title, setTitle] = useState(editing?.title ?? "");
-  const [material, setMaterial] = useState(editing?.material ?? "");
-  const [category, setCategory] = useState<MaterialCategory>(editing?.category ?? "Furniture");
-  const [description, setDescription] = useState(editing?.description ?? "");
-  const [condition, setCondition] = useState<ItemCondition>(editing?.condition ?? "Good");
-  const [weight, setWeight] = useState(editing?.weight ?? "");
-  const [area, setArea] = useState(editing?.area ?? "Riverside");
-  const [exchangeType, setExchangeType] = useState<ExchangeType>(editing?.exchangeType ?? "exchange");
+  const [params] = useSearchParams();
+  const { pending } = useScan();
+  const activeCommunity = useAsync(() => circularityService.getActiveCommunity());
+  const analysis = pending?.analysis;
+  const requestedAction = params.get("action") === "donate" ? "donation" : params.get("action");
+  const recommendedAction = analysis?.recommendedAction === "donate" ? "donation" : analysis?.recommendedAction;
+  const defaultAction: ExchangeType = TYPES.some((option) => option.value === requestedAction)
+    ? requestedAction as ExchangeType
+    : recommendedAction && TYPES.some((option) => option.value === recommendedAction)
+      ? recommendedAction
+      : "exchange";
+  const [title, setTitle] = useState(editing?.title ?? analysis?.materialName ?? "");
+  const [material, setMaterial] = useState(editing?.material ?? analysis?.subtype ?? "");
+  const [category, setCategory] = useState<MaterialCategory>(editing?.category ?? analysis?.category ?? "Furniture");
+  const [description, setDescription] = useState(editing?.description ?? analysis?.description ?? "");
+  const [condition, setCondition] = useState<ItemCondition | "">(editing?.condition ?? analysis?.condition ?? "");
+  const [weight, setWeight] = useState(editing?.weight ?? (analysis ? `${analysis.estimatedWeightKg} kg` : ""));
+  const [area, setArea] = useState(editing?.area ?? "");
+  const [exchangeType, setExchangeType] = useState<ExchangeType>(editing?.exchangeType ?? defaultAction);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
 
@@ -223,23 +241,45 @@ const ListingSheet: React.FC<{
     const next: Errors = {};
     if (!title.trim()) next.title = "Add a short title.";
     if (!material.trim()) next.material = "Say what the item is made of or what it is.";
-    if (!/\d/.test(weight)) next.weight = "Add an approximate weight, e.g. 12 kg.";
+    if (!condition) next.condition = "Choose the item's current condition.";
+    const parsedWeight = Number.parseFloat(weight);
+    if (!weight.trim() || !Number.isFinite(parsedWeight) || parsedWeight <= 0) next.weight = "Add an approximate weight greater than 0 kg.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
     setSaving(true);
+    const resolvedImage = resolveListingImage(title.trim(), category);
     const values = {
       title: title.trim(),
       material: material.trim(),
       category,
       description: description.trim(),
-      condition,
+      condition: condition as ItemCondition,
       weight: weight.trim(),
       exchangeType,
-      area: area.trim() || "Riverside",
+      area: area.trim() || activeCommunity.data?.area || "Riverside",
+      // Use scan image if present, otherwise use the resolved Unsplash image
+      imageUrl: pending?.imageDataUrl ?? resolvedImage.image_url,
+      imageAlt: resolvedImage.image_alt,
     };
-    if (editing) await circularityService.updateListing(editing.id, { ...values, quantity: values.weight });
-    else await circularityService.createListing(values);
+    if (editing) {
+      await circularityService.updateListing(editing.id, { ...values, quantity: values.weight });
+    } else {
+      // Fire-and-forget to backend (MongoDB persistence) in parallel with mock update
+      createBackendListing({
+        title: values.title,
+        material: values.material,
+        category: values.category,
+        description: values.description,
+        condition: values.condition,
+        weight: values.weight,
+        exchange_type: values.exchangeType,
+        area: values.area,
+        image_url: resolvedImage.image_url,
+        image_alt: resolvedImage.image_alt,
+      }).catch(() => { /* backend optional during demo */ });
+      await circularityService.createListing(values);
+    }
     setSaving(false);
     onSaved(!editing);
   };
@@ -313,18 +353,20 @@ const ListingSheet: React.FC<{
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">
-          <FormField id="l-condition" label="Condition">
+          <FormField id="l-condition" label="Condition" error={errors.condition}>
             <Select
               id="l-condition"
+              required
               className="h-10"
               value={condition}
-              onChange={(e) => setCondition(e.target.value as ItemCondition)}
-              options={CONDITIONS.map((c) => ({ value: c, label: c }))}
+              onChange={(e) => { setCondition(e.target.value as ItemCondition | ""); clear("condition"); }}
+              options={[{ value: "", label: "Choose condition" }, ...CONDITIONS.map((c) => ({ value: c, label: c }))]}
             />
           </FormField>
           <FormField id="l-weight" label="Approx. weight" error={errors.weight}>
             <Input
               id="l-weight"
+              type="text"
               value={weight}
               onChange={(e) => { setWeight(e.target.value); clear("weight"); }}
               placeholder="12 kg"
@@ -337,7 +379,7 @@ const ListingSheet: React.FC<{
         </div>
 
         <FormField id="l-area" label="Area" hint="A neighbourhood, never your street address.">
-          <Input id="l-area" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Riverside" aria-describedby="l-area-hint" />
+          <Input id="l-area" value={area || activeCommunity.data?.area || "Riverside"} onChange={(e) => setArea(e.target.value)} placeholder="Riverside" aria-describedby="l-area-hint" />
         </FormField>
 
         <ChoiceGroup label="Hand over by" value={exchangeType} options={TYPES} onChange={setExchangeType} />

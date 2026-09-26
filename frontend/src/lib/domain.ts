@@ -12,7 +12,7 @@
 
 /* ------------------------------- Roles -------------------------------- */
 
-export type Role = "citizen" | "organization" | "collector" | "municipality";
+export type Role = "citizen" | "organization" | "collector" | "municipality" | "community_admin";
 
 export interface User {
   id: string;
@@ -34,10 +34,12 @@ export type MaterialCategory =
   | "Furniture"
   | "Textile"
   | "Glass"
-  | "Organic";
+  | "Organic"
+  | "Sports equipment"
+  | "Household items";
 
 /** How the material is intended to leave the citizen's hands. */
-export type ExchangeType = "exchange" | "donation" | "pickup";
+export type ExchangeType = "sell" | "exchange" | "donation" | "repair" | "recycle" | "pickup";
 
 /** Condition of a listed item. */
 export type ItemCondition = "New" | "Good" | "Fair" | "For parts";
@@ -50,7 +52,12 @@ export type ListingStatus =
   | "Accepted"
   | "In transit"
   | "Completed"
-  | "Cancelled";
+  | "Cancelled"
+  | "Needs community review"
+  | "Sold"
+  | "Community buy-in"
+  | "Auction queued"
+  | "Recycler handoff";
 
 /**
  * A material a citizen has scanned/analyzed. Captures the AI-style result so it
@@ -105,6 +112,70 @@ export interface MaterialListing {
   imageAlt?: string;
   /** Display price / cost indicator, e.g. "Free", "$15", "Exchange". */
   price?: string;
+  /** Exact rupee amount for paid community-marketplace listings. */
+  priceAmount?: number;
+  communityId?: string;
+  pickupPreference?: PickupPreference;
+}
+
+export type CommunityType = "housing_society" | "local_association";
+
+export interface Community {
+  id: string;
+  name: string;
+  type: CommunityType;
+  area: string;
+  description: string;
+  memberCount: number;
+  adminName: string;
+}
+
+export interface CommunityMembership {
+  id: string;
+  communityId: string;
+  userId: string;
+  memberName: string;
+  role: "member" | "admin";
+  joinedAt: string;
+}
+
+export type PickupPreference = "Seller pickup" | "Buyer pickup" | "Coordinate locally";
+
+export interface PurchaseFeeBreakdown {
+  listingId: string;
+  listedPrice: number;
+  sellerFeeRate: 2;
+  sellerFee: number;
+  sellerPayout: number;
+  buyerPays: number;
+  currency: "INR";
+  simulated: true;
+}
+
+export interface MarketplacePurchase {
+  id: string;
+  listingId: string;
+  communityId: string;
+  buyerId: string;
+  buyerName: string;
+  sellerId: string;
+  sellerName: string;
+  breakdown: PurchaseFeeBreakdown;
+  purchasedAt: string;
+  communityBuyIn: boolean;
+}
+
+export type UnsoldReviewOutcome = "community_buy_in" | "auction_queue" | "recycler_handoff";
+
+export interface UnsoldReview {
+  id: string;
+  listingId: string;
+  communityId: string;
+  enteredReviewAt: string;
+  status: "pending" | "resolved";
+  outcome?: UnsoldReviewOutcome;
+  decidedAt?: string;
+  decidedBy?: string;
 }
 
 /* --------------------------- Organization ---------------------------- */
@@ -232,6 +303,8 @@ export type JourneyStage =
   | "Received"
   | "Completed";
 
+export type MarketplaceJourneyStage = "Sold" | "Community buy-in" | "Auction queued" | "Recycler handoff";
+
 export const JOURNEY_STAGES: JourneyStage[] = [
   "Listed",
   "Accepted",
@@ -245,7 +318,7 @@ export const JOURNEY_STAGES: JourneyStage[] = [
 /** A single recorded event in a material's journey. */
 export interface TimelineEvent {
   id: string;
-  stage: JourneyStage;
+  stage: JourneyStage | MarketplaceJourneyStage;
   /** Who performed this step (person, org, collector, municipality). */
   actor: string;
   /** ISO date the step occurred. */
@@ -310,10 +383,11 @@ export type CommunityEventKind = "offer" | "request" | "reused" | "joined";
 export interface CommunityActivity {
   id: string;
   actor: string;
-  actorType: "Resident" | "Organization";
-  kind: CommunityEventKind;
+  actorType: "Resident" | "Organization" | "Community Admin";
+  kind: CommunityEventKind | "sale" | "purchase" | "community_buy_in" | "auction" | "recycler_handoff";
   material: string;
   when: string;
+  communityId?: string;
 }
 
 /* -------------------------------- Map --------------------------------- */
@@ -358,6 +432,9 @@ export const SCAN_ACTIONS: ScanAction[] = [
  */
 export interface MaterialAnalysis {
   materialName: string;
+  subtype: string;
+  description: string;
+  stream: string;
   category: MaterialCategory;
   condition: ItemCondition;
   /** Detection confidence 0–1. */
@@ -368,10 +445,14 @@ export interface MaterialAnalysis {
   suggestedActions: ScanAction[];
   /** The single most relevant action, if any. */
   recommendedAction?: ScanAction;
+  recommendationRationale: string;
+  recommendedUse: string;
+  alternativeRecommendations: string[];
   /** Short preparation steps before handing the item on. */
   preparationGuidance: string[];
   /** Illustrative estimated weight in kg. */
   estimatedWeightKg: number;
   /** Optional pre-computed match ids (usually resolved later). */
   matches: string[];
+  analysisSource?: "gemini" | "demo";
 }

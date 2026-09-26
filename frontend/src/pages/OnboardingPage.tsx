@@ -6,6 +6,7 @@ import {
   Building2,
   Truck,
   Landmark,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { RoleOption } from "@/components/auth/RoleOption";
@@ -46,6 +47,12 @@ const ROLES: RoleDef[] = [
     title: "Municipality",
     description: "Monitor circular activity and coordinate collection.",
   },
+  {
+    value: "community_admin",
+    icon: UsersRound,
+    title: "Community Admin",
+    description: "Manage local listings and decide the next step for unsold items.",
+  },
 ];
 
 export const OnboardingPage: React.FC = () => {
@@ -73,6 +80,8 @@ export const OnboardingPage: React.FC = () => {
         return [{ key: "serviceArea", label: "Service area", placeholder: "e.g. North district" }];
       case "municipality":
         return [{ key: "zone", label: "Area / zone", placeholder: "e.g. Zone 4" }];
+      case "community_admin":
+        return [{ key: "communityName", label: "Community", placeholder: "e.g. Green Acres Society" }];
       default:
         return [];
     }

@@ -1,6 +1,6 @@
 # TraceIQ — Hackathon Context
 
-This document is the shared product and implementation context for teammates and coding agents working on the Enigma 5.0 sustainability-development track, PS6. Read it before taking over work so the current prototype is not confused with planned features.
+This document is the shared product and implementation context for teammates and coding agents working on the Enigma 5.0 sustainability-development track, PS6. Read it before taking over work so implemented frontend behavior is not confused with future backend integrations.
 
 ## Problem and product direction
 
@@ -10,18 +10,17 @@ The product direction aligns with the problem statement's sustainability and gre
 
 ## Product roles
 
-### Present in the pulled frontend
+### Frontend demo roles
 
 1. **Citizen** — scans a sample item, reviews a simulated material identification and suggested actions, explores exchanges and nearby community activity, manages listings, follows waste passports, and views illustrative impact.
 2. **Reuse/recycling organization** — manages material needs, reviews matches, and records received materials/receipts.
 3. **Collector** — reviews assigned pickup tasks and advances collection/delivery work.
-4. **Municipality** — views sample city activity, smart-bin indicators, and collection tasks.
+4. **Municipality Admin** — views sample city activity, smart-bin indicators, and collection tasks.
+5. **Community Admin** — selects a housing society or local association and reviews seven-day unsold marketplace listings, recording community buy-in, auction queue, or recycler handoff.
 
 Role selection/onboarding and demo state are frontend conveniences, not authorization. The backend currently supplies cookie-based authentication; the circular-economy experiences use mock data.
 
-### Planned next role: Community Admin
-
-Add a distinct Community Admin persona for either a geographic neighborhood/community association (for example, a local Rotary group) or a housing society. Do not treat this role as already implemented or merge it into Municipality: community-level marketplace decisions and city-level waste coordination are different responsibilities.
+Role selection and preview are frontend conveniences, not authorization. Community Admin is distinct from Municipality Admin: community-level reuse decisions and city-level waste coordination are different responsibilities. The backend does not yet persist or enforce these product roles.
 
 ## Shared material journey
 
@@ -31,48 +30,54 @@ Add a distinct Community Admin persona for either a geographic neighborhood/comm
 4. The item progresses through a traceable waste-passport timeline to a recorded outcome such as reuse, repair, upcycling, or recycling.
 5. The interface presents estimated material diversion and CO₂e impact as illustrative demo values, not verified measurements.
 
-## Marketplace evolution (planned; not yet in the pulled frontend)
+## Community circular marketplace (frontend demo implemented)
 
-Add a local circular marketplace to the existing community and listing experience. A member can list a usable product for sale to members of the active community—for example, selling an unwanted sofa for ₹1,000 rather than discarding it. Communities can represent either a local geographic group/association or an individual housing society; users should see listings for the selected community.
+Members can list usable products for sale to members of the active community—for example, selling an unwanted sofa for ₹1,000 rather than discarding it. The seeded demo includes Green Acres Housing Society and Riverside Rotary & Neighbourhood Circle. Switching the active community changes its listing and activity context.
 
 - Demonstrate a **simulated 2% seller fee** in the transaction breakdown. For a ₹1,000 sale, show ₹20 fee and ₹980 illustrative seller proceeds.
 - After **7 days without a sale**, move the listing into a Community Admin review queue.
 - The Community Admin can record one of three demo decisions: community buy-in, send to a recycler, or place into an auction queue.
-- Auction is status-only in the hackathon demo: no bidding flow. There is no real payment gateway, money transfer, or marketplace settlement.
-- Marketplace sale/review actions should preserve the material's traceability and allow a later reuse/recycle outcome to be reflected in its journey and impact.
+- A **simulated 2% seller fee** is shown transparently. For a ₹1,000 sale, show ₹20 fee and ₹980 illustrative seller proceeds. The demo purchase is a local state transition only: no gateway, money transfer, or settlement.
+- After **7 days without a sale**, a listing enters the selected community's Community Admin review queue.
+- The Community Admin can record community buy-in, send the item to a recycler, or place it into an auction queue. Auction is status-only: no bidding flow.
+- Purchases and admin outcomes update local demo listing status, community activity, and the material passport timeline. Completed reuse/recycle outcomes feed illustrative impact views.
+- These workflows run through the frontend mock service and localStorage. No marketplace/community FastAPI endpoints are implemented yet.
 
-These are the agreed product defaults for the next iteration. Implement them behind mock services first; do not imply that payment, auction, or community administration is already backed by the API.
+These are the product defaults currently represented in the frontend demo; do not imply that payment, auction, or community administration is backed by the API.
 
 ## Pulled frontend baseline
 
-The current React 18, TypeScript, Vite frontend is more than a blank scaffold. It includes:
+The current React 18, TypeScript, Vite frontend is a working prototype. It includes:
 
 - Landing, signup/login, protected app routes, and role onboarding.
-- Four role workspaces: citizen, organization, collector, and municipality.
+- Five role previews: citizen, organization, collector, municipality admin, and community admin.
 - A mobile-conscious shared app shell and role navigation.
-- Citizen scan-result flow, exchanges/matches, listings, community activity, map, impact, and waste-passport screens.
+- Citizen scan-result flow with sale/exchange/donation/repair/recycle/collection choices, exchanges/matches, personal listings, community activity, map, impact, and waste-passport screens.
+- Community marketplace with active-community selection, item sale listings, simulated checkout and 2% fee breakdown, plus a seven-day unsold review queue and three Community Admin outcomes.
 - Organization needs/matches/receipts, collector tasks, and municipality overview/bin/task screens.
 - Centralized domain types and a mock circularity service. Demo mutations persist in `localStorage` and can be reset.
-- A demo scan that returns simulated analysis; it does not access the camera or call a vision model.
+- A mobile camera and photo-upload flow connected to Gemini vision analysis through the backend. Structured output identifies the item and fills an editable sale or circular-listing draft; AI actions/rationale/alternatives are suggestions and confidence, condition, weight, and impact remain estimates.
 - Smart-bin readings and environmental impact values that are seeded examples, not live IoT or verified emissions data.
 
-Use the current implementation as the source of truth for exact behavior and routes. Inspect `frontend/src/App.tsx`, `frontend/src/lib/domain.ts`, `frontend/src/lib/circularity-service.ts`, onboarding, and the relevant page before extending it. Do not assume the marketplace, Community Admin, live image analysis, or production backend endpoints exist merely because they are in this roadmap.
+Use the current implementation as the source of truth for exact behavior and routes. Inspect `frontend/src/App.tsx`, `frontend/src/lib/domain.ts`, `frontend/src/lib/circularity-service.ts`, `frontend/src/lib/scan-service.ts`, onboarding, and the relevant page before extending it. The marketplace and Community Admin are implemented only in the frontend demo; Gemini vision analysis is backend-powered when configured, while marketplace endpoints do not exist.
 
 ## Architecture and demo constraints
 
 - **Frontend:** React 18 + TypeScript + Vite, Tailwind, React Router, Lucide icons, existing UI primitives, and the established TraceIQ visual system (mineral slate, warm stone, deep forest, sage/emerald; Inter and JetBrains Mono).
-- **Backend:** FastAPI + SQLAlchemy + Alembic, PostgreSQL intended, cookie-based JWT auth. Existing API coverage is authentication/health; check the backend before assuming other endpoints exist.
+- **Backend:** FastAPI + PyMongo + MongoDB, with cookie-based JWT authentication, persisted user accounts and saved scan records, plus Gemini image understanding with a constrained structured-output schema. Configure `GEMINI_API_KEY` in ignored `backend/.env`; never expose it in frontend code. Marketplace, community, pickup, and impact APIs are not implemented in the backend yet.
 - Keep UI data access in the current service layer. Mock APIs should be replaceable with backend calls without pushing endpoint logic into page components.
-- The demo should work without external vision credentials, live location services, smart-bin hardware, real payments, or trained custom ML. Clearly label simulated/estimated data where users could mistake it for live or verified data.
+- Gemini vision requires the backend API key; if it is missing, the scan endpoint returns a clear configuration error instead of silently showing a static item. The demo still does not require trained custom ML, live location services, smart-bin hardware, or real payments. Clearly label simulated/estimated data where users could mistake it for live or verified data.
+- Local MongoDB defaults to `mongodb://localhost:27017` with database `traceiq`; configure `MONGODB_URI`, `MONGODB_DATABASE`, and `JWT_SECRET_KEY` in `backend/.env`. Changing the backend from PostgreSQL does not migrate existing PostgreSQL records; there is no automatic data transfer.
 - For substantial UI work, read `frontend/.agents/frontend-design/SKILL.md`, follow its design-plan/review process, and preserve responsive behavior, visible keyboard focus, contrast, and reduced-motion support.
 
 ## Suggested presentation walkthrough
 
 1. Start as a citizen and run the sample scan to show the material insight and suggested next action.
 2. Show nearby reuse/exchange options and the item's journey/impact context.
-3. Introduce the circular marketplace evolution with the ₹1,000 sofa example, transparent simulated fee, and seven-day community decision path.
-4. Switch to collector and municipality views to show pickup coordination and sample city-level visibility; optionally show the organization match/receipt view as the downstream material destination.
-5. Close by distinguishing what the prototype demonstrates from future live AI, payments, location, IoT, and backend integrations.
+3. Open Marketplace, switch between Green Acres and the Riverside association, and show the difference in scoped listings. Review a simulated purchase and the ₹1,000 / ₹20 / ₹980 breakdown.
+4. Switch to Community Admin and resolve the seeded unsold sofa as community buy-in, auction queue, or recycler handoff; show the passport/activity update.
+5. Switch to collector and municipality views to show pickup coordination and sample city-level visibility; optionally show the organization match/receipt view as the downstream material destination.
+6. Close by distinguishing what the prototype demonstrates from future live AI, payments, location, IoT, and backend integrations.
 
 ## Working agreement for agents
 

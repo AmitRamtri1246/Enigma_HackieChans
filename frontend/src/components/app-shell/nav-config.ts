@@ -14,6 +14,7 @@ import {
   History,
   LayoutDashboard,
   Trash2,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 import type { TraceRole } from "@/lib/onboarding";
@@ -60,6 +61,7 @@ const CITIZEN: RoleNav = {
     {
       heading: "Community",
       items: [
+        { id: "marketplace", label: "Marketplace", icon: ShoppingBag, path: "/marketplace" },
         { id: "community", label: "Community", icon: Users, path: "/community" },
         { id: "circular-map", label: "Circular Map", icon: Map, path: "/map" },
       ],
@@ -75,6 +77,7 @@ const CITIZEN: RoleNav = {
   mobile: [
     { id: "home", label: "Home", icon: Home, path: "/app" },
     { id: "exchange", label: "Exchange", icon: Repeat, path: "/exchange" },
+    { id: "marketplace", label: "Market", icon: ShoppingBag, path: "/marketplace" },
     { id: "scan", label: "Scan", icon: ScanLine, path: "/scan" },
     { id: "listings", label: "Listings", icon: Package, path: "/listings" },
     { id: "impact", label: "Impact", icon: Leaf, path: "/impact" },
@@ -165,11 +168,40 @@ const MUNICIPALITY: RoleNav = {
   ],
 };
 
+const COMMUNITY_ADMIN: RoleNav = {
+  areaLabel: "Community",
+  home: "/community-admin",
+  groups: [
+    {
+      heading: "Community",
+      items: [
+        { id: "review-queue", label: "Unsold review", icon: ClipboardCheck, path: "/community-admin" },
+        { id: "marketplace", label: "Marketplace", icon: ShoppingBag, path: "/marketplace" },
+        { id: "community", label: "Activity", icon: Users, path: "/community" },
+      ],
+    },
+    {
+      heading: "Records",
+      items: [
+        { id: "passports", label: "Waste Passports", icon: FileText, path: "/passports" },
+        { id: "impact", label: "Community impact", icon: Leaf, path: "/impact" },
+      ],
+    },
+  ],
+  mobile: [
+    { id: "review-queue", label: "Review", icon: ClipboardCheck, path: "/community-admin" },
+    { id: "marketplace", label: "Market", icon: ShoppingBag, path: "/marketplace" },
+    { id: "community", label: "Activity", icon: Users, path: "/community" },
+    { id: "impact", label: "Impact", icon: Leaf, path: "/impact" },
+  ],
+};
+
 export const ROLE_NAV: Record<TraceRole, RoleNav> = {
   citizen: CITIZEN,
   organization: ORGANIZATION,
   collector: COLLECTOR,
   municipality: MUNICIPALITY,
+  community_admin: COMMUNITY_ADMIN,
 };
 
 /** Find the label of a nav item for the current role (used for the top-bar title). */

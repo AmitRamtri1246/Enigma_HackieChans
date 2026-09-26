@@ -2,10 +2,10 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from fastapi import Request, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
+from bson import ObjectId
 from app.config import settings
 from app.database import get_db
-from app.models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -29,7 +29,7 @@ def decode_access_token(token: str) -> dict | None:
     except JWTError:
         return None
 
-def get_current_user(request: Request, db: Session = Depends(get_db)):
+def get_current_user(request: Request, db: Database = Depends(get_db)) -> dict:
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(
@@ -45,13 +45,19 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
         )
     
     user_id: str = payload.get("sub")
-    if user_id is None:
+    if not isinstance(user_id, str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials"
         )
         
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+
+    user = db.users.find_one({"_id": ObjectId(user_id)})
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

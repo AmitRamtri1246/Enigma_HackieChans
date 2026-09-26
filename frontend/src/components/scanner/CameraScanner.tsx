@@ -52,6 +52,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const scanner = useCameraScanner();
   const { state } = scanner;
   const [analysis, setAnalysis] = useState<Analysis>({ phase: "none" });
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const runAnalysis = (file: File) => {
@@ -59,13 +60,26 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     scanService
       .analyzeMaterial(file, { scanContext, communityId })
       .then((result) => setAnalysis({ phase: "success", result }))
-      .catch(() => setAnalysis({ phase: "error", message: "Couldn't analyze this image." }));
+      .catch((error: unknown) => setAnalysis({
+        phase: "error",
+        message: error instanceof Error ? error.message : "Couldn't analyze this image.",
+      }));
   };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file later
-    if (file) scanner.useUploadedFile(file);
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Choose an image file, such as JPG, PNG, or WebP.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("Choose an image smaller than 10 MB.");
+      return;
+    }
+    setUploadError(null);
+    scanner.useUploadedFile(file);
   };
 
   const openFilePicker = () => fileInputRef.current?.click();
@@ -85,7 +99,10 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           setAnalysis({ phase: "none" });
           void scanner.retake();
         }}
-        onAction={(action) => onAction(action, { analysis: analysis.result, file: state.file })}
+        onAction={(action, details) => onAction(action, {
+          analysis: { ...analysis.result, condition: details.condition, estimatedWeightKg: details.weightKg },
+          file: state.file,
+        })}
       />
     );
   }
@@ -128,6 +145,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         fileInputRef={fileInputRef}
         onUpload={handleUpload}
         onCancel={onCancel}
+        uploadError={uploadError}
       />
     );
   }
@@ -137,11 +155,12 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       <ScannerNotice
         icon={CameraOff}
         title="Camera isn't available on this device."
-        description="You can upload a photo of the item instead."
+        description={!window.isSecureContext ? "Phone camera access requires a secure HTTPS page. Open TraceIQ through HTTPS, or upload a photo instead." : "You can upload a photo of the item instead."}
         primary={{ label: "Upload a photo", onClick: openFilePicker }}
         fileInputRef={fileInputRef}
         onUpload={handleUpload}
         onCancel={onCancel}
+        uploadError={uploadError}
       />
     );
   }
@@ -157,6 +176,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         fileInputRef={fileInputRef}
         onUpload={handleUpload}
         onCancel={onCancel}
+        uploadError={uploadError}
       />
     );
   }
@@ -187,6 +207,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             <Upload className="h-4 w-4" />
             Upload a photo instead
           </button>
+          {uploadError && <p role="alert" className="mt-3 text-sm text-destructive">{uploadError}</p>}
         </div>
         <HiddenFileInput ref={fileInputRef} onChange={handleUpload} />
       </div>
@@ -315,6 +336,7 @@ interface ScannerNoticeProps {
   fileInputRef: React.RefObject<HTMLInputElement>;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onCancel?: () => void;
+  uploadError?: string | null;
 }
 
 const ScannerNotice: React.FC<ScannerNoticeProps> = ({
@@ -326,6 +348,7 @@ const ScannerNotice: React.FC<ScannerNoticeProps> = ({
   fileInputRef,
   onUpload,
   onCancel,
+  uploadError,
 }) => (
   <div className="mx-auto w-full max-w-md text-center">
     <div className="flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-10">
@@ -334,6 +357,7 @@ const ScannerNotice: React.FC<ScannerNoticeProps> = ({
       </span>
       <h2 className="mt-4 text-base font-semibold text-foreground">{title}</h2>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+      {uploadError && <p role="alert" className="mt-2 text-sm text-destructive">{uploadError}</p>}
       <div className="mt-5 flex flex-col gap-2.5">
         <Button className={cn("gap-2")} onClick={primary.onClick}>
           {primary.label}

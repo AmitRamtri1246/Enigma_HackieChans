@@ -22,7 +22,7 @@ type Tab = "foryou" | "offers" | "requests" | "mine";
 
 const CATEGORY_OPTIONS = [
   { value: "all", label: "All materials" },
-  ...(["Plastic", "Cardboard", "Metal", "Electronics", "Furniture", "Textile", "Glass"] as MaterialCategory[]).map((c) => ({ value: c, label: c })),
+  ...(["Plastic", "Cardboard", "Metal", "Electronics", "Furniture", "Textile", "Glass", "Sports equipment", "Household items"] as MaterialCategory[]).map((c) => ({ value: c, label: c })),
 ];
 const DISTANCE_OPTIONS = [
   { value: "any", label: "Any distance" },
@@ -209,13 +209,22 @@ export const ExchangePage: React.FC = () => {
 
 const ListingCard: React.FC<{ match: Match; listing?: MaterialListing }> = ({ match, listing }) => {
   const exchangeType: ExchangeType = listing?.exchangeType ?? "donation";
+  // Prefer listing image, fall back to match image (both seeded from IMAGES.marketplace.*)
+  const imageUrl = listing?.imageUrl ?? match.imageUrl;
+  const imageAlt = listing?.imageAlt ?? match.imageAlt ?? match.material;
   return (
     <Link
       to={`/exchange/${match.id}`}
       className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
     >
       <div className="overflow-hidden rounded-lg border border-border">
-        <MaterialThumb category={match.category} size="lg" className="rounded-none transition-transform duration-200 ease-out group-hover:scale-[1.02]" />
+        <MaterialThumb
+          category={match.category}
+          size="lg"
+          imageUrl={imageUrl}
+          alt={imageAlt}
+          className="rounded-none transition-transform duration-200 ease-out group-hover:scale-[1.02]"
+        />
       </div>
       <div className="mt-3 flex items-start justify-between gap-3">
         <h3 className="min-w-0 truncate text-[15px] font-medium text-foreground group-hover:underline group-hover:decoration-border group-hover:underline-offset-4">
@@ -309,7 +318,7 @@ const MyListingsTable: React.FC<{ listings: MaterialListing[]; loading: boolean 
     );
   }
   const columns: Column<MaterialListing>[] = [
-    { id: "item", header: "Item", mobile: "primary", cell: (l) => <ItemCell category={l.category} title={l.title} /> },
+    { id: "item", header: "Item", mobile: "primary", cell: (l) => <ItemCell category={l.category} title={l.title} imageUrl={l.imageUrl} imageAlt={l.imageAlt} /> },
     { id: "type", header: "Type", cell: (l) => EXCHANGE_TYPE_LABEL[l.exchangeType] },
     { id: "qty", header: "Quantity", cell: (l) => <span className="font-mono">{l.quantity}</span> },
     { id: "status", header: "Status", mobile: "trailing", cell: (l) => <StatusBadge status={l.status} /> },

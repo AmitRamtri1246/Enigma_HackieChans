@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Armchair, Box, Cpu, GlassWater, Leaf, Milk, Shirt, Wrench, type LucideIcon } from "lucide-react";
+import { ChevronRight, Armchair, Box, Cpu, Dumbbell, GlassWater, House, Leaf, Milk, Shirt, Wrench, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MaterialCategory } from "@/lib/domain";
 
@@ -130,6 +130,8 @@ const CATEGORY_VISUAL: Record<MaterialCategory, { icon: LucideIcon; tone: string
   Textile: { icon: Shirt, tone: "bg-[#EFE8E6] text-[#7A5750]" },
   Glass: { icon: GlassWater, tone: "bg-[#E4EEEE] text-[#3E6664]" },
   Organic: { icon: Leaf, tone: "bg-[#E9EFE1] text-[#52663A]" },
+  "Sports equipment": { icon: Dumbbell, tone: "bg-[#E9ECEC] text-[#4D5A57]" },
+  "Household items": { icon: House, tone: "bg-[#EEEAE2] text-[#6B5B45]" },
 };
 
 /**
@@ -169,9 +171,11 @@ export const ItemCell: React.FC<{
   category: MaterialCategory;
   title: string;
   sub?: React.ReactNode;
-}> = ({ category, title, sub }) => (
+  imageUrl?: string;
+  imageAlt?: string;
+}> = ({ category, title, sub, imageUrl, imageAlt }) => (
   <span className="flex min-w-0 items-center gap-3">
-    <MaterialThumb category={category} />
+    <MaterialThumb category={category} imageUrl={imageUrl} alt={imageAlt ?? title} />
     <span className="min-w-0">
       <span className="block truncate text-sm font-medium text-foreground">{title}</span>
       {sub && <span className="block truncate text-[13px] font-normal text-muted-foreground">{sub}</span>}

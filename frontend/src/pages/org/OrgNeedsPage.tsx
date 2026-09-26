@@ -21,7 +21,7 @@ import { circularityService } from "@/lib/circularity-service";
 import type { MaterialCategory, OrganizationNeed } from "@/lib/domain";
 import { CheckCircle2, Inbox, Loader2, MoreHorizontal, Pencil, Plus } from "lucide-react";
 
-const CATEGORIES: MaterialCategory[] = ["Plastic", "Cardboard", "Metal", "Electronics", "Furniture", "Textile", "Glass", "Organic"];
+const CATEGORIES: MaterialCategory[] = ["Plastic", "Cardboard", "Metal", "Electronics", "Furniture", "Textile", "Glass", "Organic", "Sports equipment", "Household items"];
 type Filter = "open" | "closed";
 
 /** Material Needs — job: keep the list of wanted materials accurate. */

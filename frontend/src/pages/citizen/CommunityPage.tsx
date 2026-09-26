@@ -6,28 +6,36 @@ import { SkeletonList } from "@/components/ui/skeleton";
 import { TabsList, TabsPanel } from "@/components/ui/tabs";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import type { CommunityActivity, CommunityEventKind } from "@/lib/domain";
+import type { CommunityActivity } from "@/lib/domain";
 import { Users } from "lucide-react";
+import { CommunitySelector } from "@/components/common/CommunitySelector";
 
-type Filter = "all" | "offer" | "request";
+type Filter = "all" | "offer" | "request" | "marketplace";
 
-const VERB: Record<CommunityEventKind, string> = {
+const VERB: Record<CommunityActivity["kind"], string> = {
   offer: "offered",
   request: "is looking for",
   reused: "gave a second life to",
   joined: "joined the community",
+  sale: "listed for sale",
+  purchase: "gave a second life to",
+  community_buy_in: "brought into the community",
+  auction: "queued for community auction",
+  recycler_handoff: "sent to a recycler",
 };
 
 /** Community — a lightweight feed of what neighbours are offering and asking for. */
 export const CommunityPage: React.FC = () => {
   const activity = useAsync(() => circularityService.getCommunityActivity());
   const [filter, setFilter] = useState<Filter>("all");
-  const rows = (activity.data ?? []).filter((a) => filter === "all" || a.kind === filter);
+  const rows = (activity.data ?? []).filter((a) => filter === "all" || (filter === "marketplace" ? a.kind !== "offer" && a.kind !== "request" : a.kind === filter));
 
   return (
     <AppShell active="community" title="Community">
       <PageContainer size="narrow">
         <PageHeader title="Community" subtitle="What residents and organizations nearby are offering and asking for." />
+
+        <CommunitySelector />
 
         <TabsList<Filter>
           idBase="community"
@@ -38,6 +46,7 @@ export const CommunityPage: React.FC = () => {
             { value: "all", label: "All" },
             { value: "offer", label: "Offers" },
             { value: "request", label: "Requests" },
+            { value: "marketplace", label: "Marketplace" },
           ]}
         />
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CircularityProvider } from "@/contexts/CircularityContext";
 import { ToastProvider } from "@/components/common/ToastProvider";
+import { ScanProvider } from "@/contexts/ScanContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { LandingPage } from "@/pages/LandingPage";
 import { LoginPage } from "@/pages/auth/LoginPage";
@@ -20,6 +21,8 @@ import { PassportDetailPage } from "@/pages/citizen/PassportDetailPage";
 import { ImpactPage } from "@/pages/citizen/ImpactPage";
 import { CommunityPage } from "@/pages/citizen/CommunityPage";
 import { MapPage } from "@/pages/citizen/MapPage";
+import { MarketplacePage } from "@/pages/citizen/MarketplacePage";
+import { CommunityAdminPage } from "@/pages/community-admin/CommunityAdminPage";
 
 // Organization
 import { OrgDashboardPage } from "@/pages/org/OrgDashboardPage";
@@ -51,6 +54,7 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ScanProvider>
         <Routes>
           {/* Public */}
           <Route path="/" element={<LandingPage />} />
@@ -75,6 +79,8 @@ export const App: React.FC = () => {
           <Route path="/passports/:id" element={<Protected><PassportDetailPage /></Protected>} />
           <Route path="/impact" element={<Protected><ImpactPage /></Protected>} />
           <Route path="/community" element={<Protected><CommunityPage /></Protected>} />
+          <Route path="/marketplace" element={<Protected><MarketplacePage /></Protected>} />
+          <Route path="/community-admin" element={<Protected><CommunityAdminPage /></Protected>} />
           <Route path="/map" element={<Protected><MapPage /></Protected>} />
 
           {/* Organization workspace */}
@@ -97,6 +103,7 @@ export const App: React.FC = () => {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ScanProvider>
       </AuthProvider>
     </BrowserRouter>
   );

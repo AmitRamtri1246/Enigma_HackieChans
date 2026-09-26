@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-const ROLES: TraceRole[] = ["citizen", "organization", "collector", "municipality"];
+const ROLES: TraceRole[] = ["citizen", "organization", "collector", "municipality", "community_admin"];
 
 interface RolePreviewSwitcherProps {
   role: TraceRole;
