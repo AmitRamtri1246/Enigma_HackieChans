@@ -12,6 +12,13 @@ TraceIQ is a sustainability intelligence platform starter for the Enigma hackath
 
 Keep this document current when the hackathon problem statement introduces new product requirements, services, or development commands.
 
+## Shared hackathon context
+
+- Read [`HACKATHON_CONTEXT.md`](HACKATHON_CONTEXT.md) before project-wide work or when handing work between agents/teammates. It records the PS6 product direction, current demo baseline, planned marketplace evolution, and explicit prototype limitations.
+- Treat the current frontend as four implemented role workspaces: citizen, organization, collector, and municipality. Community Admin and the circular marketplace are planned next-iteration features; do not describe them as implemented until verified in the code.
+- Keep live capabilities, mock/demo behavior, and roadmap items clearly distinguished. In particular, the current scan is simulated, impact and smart-bin data are illustrative, and marketplace fees/payments/auction are not live services.
+- When these product requirements change, update `HACKATHON_CONTEXT.md`; keep this file focused on durable repository instructions and conventions.
+
 ## Repository layout
 
 ```text
