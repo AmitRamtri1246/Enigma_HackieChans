@@ -1,287 +1,199 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/components/AuthLayout";
+import { AuthInput } from "@/components/auth/AuthInput";
+import { AuthButton } from "@/components/auth/AuthButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiRequestError } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  AlertCircle,
-  Loader2,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  ArrowRight,
-} from "lucide-react";
+import { AlertCircle } from "lucide-react";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  // Form states - clean initial values, no default errors
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  // Status & Validation states - strictly empty on initial load
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  // Simple forgot password modal
-  const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSubmitted, setForgotSubmitted] = useState(false);
-
-  // Form validation handler
   const validate = () => {
-    const newErrors: { email?: string; password?: string } = {};
-
+    const next: { email?: string; password?: string } = {};
     if (!email.trim()) {
-      newErrors.email = "Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Please enter a valid email address.";
+      next.email = "Email is required.";
+    } else if (!EMAIL_RE.test(email.trim())) {
+      next.email = "Please enter a valid email.";
     }
-
-    if (!password) {
-      newErrors.password = "Password is required.";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    if (!password) next.password = "Password is required.";
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError(null);
-
     if (!validate()) return;
 
-    setIsLoading(true);
-
+    setStatus("loading");
     try {
       await login({ email: email.trim().toLowerCase(), password });
-      navigate('/app');
+      setStatus("success");
+      // Brief success beat before navigating.
+      setTimeout(() => navigate("/app"), 500);
     } catch (err) {
+      setStatus("idle");
       if (err instanceof ApiRequestError) {
-        setGeneralError(err.detail);
+        setGeneralError(
+          err.status === 401
+            ? "That email or password doesn't match. Try again."
+            : err.detail
+        );
       } else {
-        setGeneralError('An unexpected error occurred. Please try again.');
+        setGeneralError("We couldn't reach the server. Check your connection and try again.");
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (forgotEmail.trim()) {
-      setForgotSubmitted(true);
-      setTimeout(() => {
-        setForgotSubmitted(false);
-        setShowForgotModal(false);
-        setForgotEmail("");
-      }, 2000);
-    }
-  };
+  const busy = status !== "idle";
 
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in to access your organization's environmental telemetry."
+      subtitle="Sign in to continue your circular journey."
     >
-      {/* General error alert - only visible when an actual error occurs */}
       {generalError && (
         <div
           role="alert"
-          className="mb-5 flex items-start gap-2.5 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive transition-all duration-200 motion-safe:animate-fadeIn"
+          className="mb-5 flex items-start gap-2.5 rounded-[10px] border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive motion-safe:animate-fadeIn"
         >
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-relaxed">{generalError}</p>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        {/* Email Field */}
-        <div className="space-y-1.5">
-          <Label htmlFor="login-email" className="text-xs font-medium text-foreground">
-            Work email
-          </Label>
-          <Input
-            id="login-email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@organization.com"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
-              if (generalError) setGeneralError(null);
-            }}
-            error={Boolean(errors.email)}
-            disabled={isLoading}
-          />
-          {errors.email && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.email}
-            </p>
-          )}
-        </div>
+        <AuthInput
+          id="login-email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          error={errors.email}
+          disabled={busy}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+            if (generalError) setGeneralError(null);
+          }}
+        />
 
-        {/* Password Field */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="login-password" className="text-xs font-medium text-foreground">
-              Password
-            </Label>
-            <button
-              type="button"
-              onClick={() => {
-                setForgotEmail(email);
-                setShowForgotModal(true);
-              }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-xs"
+        <AuthInput
+          id="login-password"
+          label="Password"
+          password
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={password}
+          error={errors.password}
+          disabled={busy}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+            if (generalError) setGeneralError(null);
+          }}
+          labelAction={
+            <Link
+              to="/login"
+              className="rounded-xs text-xs text-brand-sage underline-offset-2 transition-colors hover:text-brand-forest hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={(e) => e.preventDefault()}
             >
               Forgot password?
-            </button>
-          </div>
-          <div className="relative">
-            <Input
-              id="login-password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              placeholder="••••••••••••"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
-                if (generalError) setGeneralError(null);
-              }}
-              error={Boolean(errors.password)}
-              disabled={isLoading}
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4 transition-transform duration-150" />
-              ) : (
-                <Eye className="h-4 w-4 transition-transform duration-150" />
-              )}
-            </button>
-          </div>
-          {errors.password && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.password}
-            </p>
-          )}
-        </div>
+            </Link>
+          }
+        />
 
-        {/* Remember device checkbox */}
         <div className="flex items-center space-x-2 pt-0.5">
           <Checkbox
-            id="remember-device"
+            id="remember-me"
             checked={rememberMe}
-            onCheckedChange={(checked) => setRememberMe(checked === true)}
-            disabled={isLoading}
+            onCheckedChange={(c) => setRememberMe(c === true)}
+            disabled={busy}
           />
           <Label
-            htmlFor="remember-device"
-            className="text-xs font-normal text-muted-foreground cursor-pointer select-none"
+            htmlFor="remember-me"
+            className="cursor-pointer select-none text-xs font-normal text-muted-foreground"
           >
-            Remember this device
+            Remember me
           </Label>
         </div>
 
-        {/* Primary Sign-in Button */}
-        <Button
+        <AuthButton
           type="submit"
-          disabled={isLoading}
-          className="w-full gap-2 mt-2 h-10 font-medium"
+          loading={status === "loading"}
+          success={status === "success"}
+          loadingText="Signing in..."
+          successText="Signed in"
+          className="mt-2"
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
-              <span>Signing in...</span>
-            </>
-          ) : (
-            <>
-              <span>Sign in</span>
-              <ArrowRight className="h-4 w-4 opacity-80" />
-            </>
-          )}
-        </Button>
+          Sign in
+        </AuthButton>
       </form>
 
-      {/* Small Signup Link */}
-      <div className="mt-6 text-center text-xs text-muted-foreground">
-        <span>Don't have an account? </span>
+      <div className="my-6 flex items-center gap-3">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-[11px] text-muted-foreground">or continue with</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          setGeneralError("Google sign-in isn't connected in this prototype yet.")
+        }
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-[10px] border border-border bg-card text-sm font-medium text-foreground transition-colors duration-150 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+      >
+        <GoogleMark />
+        <span>Google</span>
+      </button>
+
+      <p className="mt-6 text-center text-xs text-muted-foreground">
+        Don't have an account?{" "}
         <Link
           to="/signup"
-          className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-xs"
+          className="rounded-xs font-medium text-brand-forest underline underline-offset-4 transition-colors hover:text-brand-sage focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           Create account
         </Link>
-      </div>
-
-      {/* Forgot Password Dialog */}
-      {showForgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl space-y-4 transition-all">
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-foreground">
-                Reset password
-              </h3>
-              <p className="text-xs text-muted-foreground leading-normal">
-                Enter your work email to receive password reset instructions.
-              </p>
-            </div>
-
-            {forgotSubmitted ? (
-              <div className="flex items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                <span>Reset link dispatched. Please check your inbox.</span>
-              </div>
-            ) : (
-              <form onSubmit={handleForgotSubmit} className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="forgot-email" className="text-xs">
-                    Work email
-                  </Label>
-                  <Input
-                    id="forgot-email"
-                    type="email"
-                    placeholder="name@organization.com"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowForgotModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" size="sm">
-                    Send instructions
-                  </Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+      </p>
     </AuthLayout>
   );
 };
+
+const GoogleMark: React.FC = () => (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      fill="#4285F4"
+      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1Z"
+    />
+    <path
+      fill="#34A853"
+      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z"
+    />
+    <path
+      fill="#EA4335"
+      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
+    />
+  </svg>
+);

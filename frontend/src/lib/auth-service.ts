@@ -1,9 +1,12 @@
 import { apiRequest } from './api';
 
+import type { TraceRole } from "./onboarding";
+
 export interface User {
   id: number;
   full_name: string;
   email: string;
+  role: TraceRole;
   created_at: string;
 }
 
@@ -11,6 +14,7 @@ export interface RegisterData {
   full_name: string;
   email: string;
   password: string;
+  role: TraceRole;
 }
 
 export interface LoginData {

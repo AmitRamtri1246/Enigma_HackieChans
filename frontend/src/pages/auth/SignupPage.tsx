@@ -1,370 +1,254 @@
-import React, { useState, useId } from "react";
+import React, { useId, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/components/AuthLayout";
+import { AuthInput } from "@/components/auth/AuthInput";
+import { AuthButton } from "@/components/auth/AuthButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiRequestError } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { RoleOption } from "@/components/auth/RoleOption";
+import type { TraceRole } from "@/lib/onboarding";
 import {
   AlertCircle,
-  Loader2,
-  Eye,
-  EyeOff,
-  ArrowRight,
-  ShieldCheck,
-  Check,
+  User as UserIcon,
+  Building2,
+  Truck,
+  Landmark,
+  type LucideIcon,
 } from "lucide-react";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const ROLE_CHOICES: { value: TraceRole; icon: LucideIcon; title: string; description: string }[] = [
+  {
+    value: "citizen",
+    icon: UserIcon,
+    title: "Citizen",
+    description: "List, exchange and track materials you no longer need.",
+  },
+  {
+    value: "organization",
+    icon: Building2,
+    title: "Organization",
+    description: "Find materials your organization can reuse, repair or recycle.",
+  },
+  {
+    value: "collector",
+    icon: Truck,
+    title: "Collector",
+    description: "Manage assigned pickups and deliveries.",
+  },
+  {
+    value: "municipality",
+    icon: Landmark,
+    title: "Municipality",
+    description: "Monitor circular activity and coordinate collection.",
+  },
+];
 
 export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const fullNameId = useId();
+
+  const nameId = useId();
   const emailId = useId();
   const passwordId = useId();
-  const confirmPasswordId = useId();
-  const termsId = useId();
+  const confirmId = useId();
 
-  // Form fields - clean initial values, no default errors
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [role, setRole] = useState<TraceRole>("citizen");
 
-  // Visibility toggles
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Status & Validation states - strictly empty on initial load
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  // Password Strength Calculation
-  const hasMinLength = password.length >= 8;
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-
-  const strengthScore = [hasMinLength, hasUppercase, hasNumber, hasSpecial].filter(
-    Boolean
-  ).length;
-
-  const getStrengthLabel = () => {
-    if (!password) return { text: "None", width: "0%" };
-    if (strengthScore <= 1) return { text: "Weak", width: "25%", color: "bg-destructive" };
-    if (strengthScore === 2) return { text: "Fair", width: "50%", color: "bg-amber-500" };
-    if (strengthScore === 3) return { text: "Good", width: "75%", color: "bg-emerald-500" };
-    return { text: "Strong", width: "100%", color: "bg-emerald-600" };
+  const clearFieldError = (key: string) => {
+    if (errors[key]) setErrors((p) => ({ ...p, [key]: "" }));
+    if (generalError) setGeneralError(null);
   };
 
-  const strength = getStrengthLabel();
-
-  // Form Validation
-  const validateForm = () => {
-    const errs: Record<string, string> = {};
-
-    if (!fullName.trim()) {
-      errs.fullName = "Full name is required.";
-    }
+  const validate = () => {
+    const next: Record<string, string> = {};
+    if (!fullName.trim()) next.fullName = "Full name is required.";
 
     if (!email.trim()) {
-      errs.email = "Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errs.email = "Please enter a valid work email.";
+      next.email = "Email is required.";
+    } else if (!EMAIL_RE.test(email.trim())) {
+      next.email = "Please enter a valid email.";
     }
 
     if (!password) {
-      errs.password = "Password is required.";
+      next.password = "Password is required.";
     } else if (password.length < 8) {
-      errs.password = "Password must be at least 8 characters.";
+      next.password = "Use at least 8 characters.";
     }
 
     if (!confirmPassword) {
-      errs.confirmPassword = "Please confirm your password.";
+      next.confirmPassword = "Please confirm your password.";
     } else if (password !== confirmPassword) {
-      errs.confirmPassword = "Passwords do not match.";
+      next.confirmPassword = "Passwords don't match.";
     }
 
-    if (!agreeTerms) {
-      errs.agreeTerms = "You must agree to the terms and privacy guidelines.";
-    }
-
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError(null);
+    if (!validate()) return;
 
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-
+    setStatus("loading");
     try {
-      await register({ full_name: fullName.trim(), email: email.trim().toLowerCase(), password });
-      navigate('/app');
+      await register({
+        full_name: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        role,
+      });
+      setStatus("success");
+      // Role is chosen here and persisted server-side; open the workspace.
+      setTimeout(() => navigate("/app"), 500);
     } catch (err) {
+      setStatus("idle");
       if (err instanceof ApiRequestError) {
         if (err.status === 409) {
-          setErrors({ email: err.detail });
+          setErrors((p) => ({ ...p, email: "An account with this email already exists." }));
         } else {
           setGeneralError(err.detail);
         }
       } else {
-        setGeneralError('An unexpected error occurred. Please try again.');
+        setGeneralError("We couldn't reach the server. Check your connection and try again.");
       }
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  const busy = status !== "idle";
 
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="Establish your organization's environmental baseline and reduction workflows."
+      subtitle="Join the local circular economy."
     >
-      {/* General error alert - only visible when an actual error occurs */}
       {generalError && (
         <div
           role="alert"
-          className="mb-5 flex items-start gap-2.5 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive transition-all duration-200 motion-safe:animate-fadeIn"
+          className="mb-5 flex items-start gap-2.5 rounded-[10px] border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive motion-safe:animate-fadeIn"
         >
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-relaxed">{generalError}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-3.5" noValidate>
-        {/* Full Name */}
-        <div className="space-y-1">
-          <Label htmlFor={fullNameId} className="text-xs font-medium text-foreground">
-            Full name
-          </Label>
-          <Input
-            id={fullNameId}
-            type="text"
-            placeholder="Marcus Lindqvist"
-            value={fullName}
-            onChange={(e) => {
-              setFullName(e.target.value);
-              if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: "" }));
-              if (generalError) setGeneralError(null);
-            }}
-            error={Boolean(errors.fullName)}
-            disabled={isLoading}
-          />
-          {errors.fullName && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.fullName}
-            </p>
-          )}
-        </div>
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <AuthInput
+          id={nameId}
+          label="Full name"
+          type="text"
+          autoComplete="name"
+          placeholder="Your name"
+          value={fullName}
+          error={errors.fullName}
+          disabled={busy}
+          onChange={(e) => {
+            setFullName(e.target.value);
+            clearFieldError("fullName");
+          }}
+        />
 
-        {/* Work Email */}
-        <div className="space-y-1">
-          <Label htmlFor={emailId} className="text-xs font-medium text-foreground">
-            Work email
-          </Label>
-          <Input
-            id={emailId}
-            type="email"
-            placeholder="name@organization.com"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (errors.email) setErrors((prev) => ({ ...prev, email: "" }));
-              if (generalError) setGeneralError(null);
-            }}
-            error={Boolean(errors.email)}
-            disabled={isLoading}
-          />
-          {errors.email && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.email}
-            </p>
-          )}
-        </div>
+        <AuthInput
+          id={emailId}
+          label="Email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          error={errors.email}
+          disabled={busy}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            clearFieldError("email");
+          }}
+        />
 
-        {/* Password */}
-        <div className="space-y-1">
-          <Label htmlFor={passwordId} className="text-xs font-medium text-foreground">
-            Password
+        <AuthInput
+          id={passwordId}
+          label="Password"
+          password
+          autoComplete="new-password"
+          placeholder="At least 8 characters"
+          value={password}
+          error={errors.password}
+          disabled={busy}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            clearFieldError("password");
+          }}
+        />
+
+        <AuthInput
+          id={confirmId}
+          label="Confirm password"
+          password
+          autoComplete="new-password"
+          placeholder="Re-enter your password"
+          value={confirmPassword}
+          error={errors.confirmPassword}
+          disabled={busy}
+          onChange={(e) => {
+            setConfirmPassword(e.target.value);
+            clearFieldError("confirmPassword");
+          }}
+        />
+
+        {/* Role selection — how you'll use TraceIQ (saved to your account) */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-foreground">
+            How will you use TraceIQ?
           </Label>
-          <div className="relative">
-            <Input
-              id={passwordId}
-              type={showPassword ? "text" : "password"}
-              placeholder="Minimum 8 characters"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (errors.password) setErrors((prev) => ({ ...prev, password: "" }));
-                if (generalError) setGeneralError(null);
-              }}
-              error={Boolean(errors.password)}
-              disabled={isLoading}
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4 transition-transform duration-150" />
-              ) : (
-                <Eye className="h-4 w-4 transition-transform duration-150" />
-              )}
-            </button>
+          <div
+            role="radiogroup"
+            aria-label="Select your role"
+            className="space-y-2"
+          >
+            {ROLE_CHOICES.map((choice) => (
+              <RoleOption
+                key={choice.value}
+                icon={choice.icon}
+                title={choice.title}
+                description={choice.description}
+                selected={role === choice.value}
+                onSelect={() => setRole(choice.value)}
+                disabled={busy}
+              />
+            ))}
           </div>
-          {errors.password && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.password}
-            </p>
-          )}
-
-          {/* Password Strength Indicator - appears naturally only while typing */}
-          {password.length > 0 && (
-            <div className="space-y-1.5 pt-1.5 transition-all duration-200">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <ShieldCheck className="h-3 w-3 text-muted-foreground" />
-                  Strength
-                </span>
-                <span className="font-medium text-foreground">{strength.text}</span>
-              </div>
-              <div className="h-1 w-full bg-secondary rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-300 ${strength.color}`}
-                  style={{ width: strength.width }}
-                />
-              </div>
-
-              {/* Requirement Checkpoints */}
-              <div className="grid grid-cols-2 gap-1 pt-0.5 text-[10px] text-muted-foreground">
-                <span className={`flex items-center gap-1 ${hasMinLength ? "text-emerald-700 font-medium" : ""}`}>
-                  <Check className={`h-2.5 w-2.5 ${hasMinLength ? "opacity-100" : "opacity-30"}`} />
-                  8+ characters
-                </span>
-                <span className={`flex items-center gap-1 ${hasUppercase ? "text-emerald-700 font-medium" : ""}`}>
-                  <Check className={`h-2.5 w-2.5 ${hasUppercase ? "opacity-100" : "opacity-30"}`} />
-                  Uppercase letter
-                </span>
-                <span className={`flex items-center gap-1 ${hasNumber ? "text-emerald-700 font-medium" : ""}`}>
-                  <Check className={`h-2.5 w-2.5 ${hasNumber ? "opacity-100" : "opacity-30"}`} />
-                  Number
-                </span>
-                <span className={`flex items-center gap-1 ${hasSpecial ? "text-emerald-700 font-medium" : ""}`}>
-                  <Check className={`h-2.5 w-2.5 ${hasSpecial ? "opacity-100" : "opacity-30"}`} />
-                  Special symbol
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Confirm Password */}
-        <div className="space-y-1">
-          <Label htmlFor={confirmPasswordId} className="text-xs font-medium text-foreground">
-            Confirm password
-          </Label>
-          <div className="relative">
-            <Input
-              id={confirmPasswordId}
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Repeat password"
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: "" }));
-                if (generalError) setGeneralError(null);
-              }}
-              error={Boolean(errors.confirmPassword)}
-              disabled={isLoading}
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-4 w-4 transition-transform duration-150" />
-              ) : (
-                <Eye className="h-4 w-4 transition-transform duration-150" />
-              )}
-            </button>
-          </div>
-          {errors.confirmPassword && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.confirmPassword}
-            </p>
-          )}
-        </div>
-
-        {/* Terms Checkbox */}
-        <div className="space-y-1 pt-1">
-          <div className="flex items-start space-x-2">
-            <Checkbox
-              id={termsId}
-              checked={agreeTerms}
-              onCheckedChange={(checked) => {
-                setAgreeTerms(checked === true);
-                if (errors.agreeTerms) setErrors((prev) => ({ ...prev, agreeTerms: "" }));
-              }}
-              disabled={isLoading}
-              className="mt-0.5"
-            />
-            <Label
-              htmlFor={termsId}
-              className="text-xs text-muted-foreground leading-snug cursor-pointer select-none font-normal"
-            >
-              I agree to the platform terms and privacy guidelines.
-            </Label>
-          </div>
-          {errors.agreeTerms && (
-            <p className="text-xs text-destructive font-medium transition-opacity duration-150">
-              {errors.agreeTerms}
-            </p>
-          )}
-        </div>
-
-        {/* Primary Create Account Button */}
-        <Button
+        <AuthButton
           type="submit"
-          disabled={isLoading}
-          className="w-full gap-2 mt-2 h-10 font-medium"
+          loading={status === "loading"}
+          success={status === "success"}
+          loadingText="Creating account..."
+          successText="Account created"
+          className="mt-2"
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
-              <span>Creating account...</span>
-            </>
-          ) : (
-            <>
-              <span>Create account</span>
-              <ArrowRight className="h-4 w-4 opacity-80" />
-            </>
-          )}
-        </Button>
+          Create account
+        </AuthButton>
       </form>
 
-      {/* Small Sign-in Link */}
-      <div className="mt-6 text-center text-xs text-muted-foreground">
-        <span>Already have an account? </span>
+      <p className="mt-6 text-center text-xs text-muted-foreground">
+        Already have an account?{" "}
         <Link
           to="/login"
-          className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-xs"
+          className="rounded-xs font-medium text-brand-forest underline underline-offset-4 transition-colors hover:text-brand-sage focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           Sign in
         </Link>
-      </div>
+      </p>
     </AuthLayout>
   );
 };

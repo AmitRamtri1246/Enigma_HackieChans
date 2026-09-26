@@ -4,40 +4,47 @@
 
 @layer base {
   :root {
-    /* Warm limestone & mineral palette */
-    --background: 40 20% 97%;
-    --foreground: 160 25% 10%;
+    /* TraceIQ circular-economy palette — mapped from exact brief hex values */
+    /* #F7F8F5 canvas */
+    --background: 90 14% 97%;
+    /* #0E1513 ink */
+    --foreground: 162 20% 7%;
 
+    /* #FFFFFF */
     --card: 0 0% 100%;
-    --card-foreground: 160 25% 10%;
+    --card-foreground: 162 20% 7%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 160 25% 10%;
+    --popover-foreground: 162 20% 7%;
 
-    /* Deep forest evergreen */
+    /* #163326 deep forest */
     --primary: 154 40% 15%;
-    --primary-foreground: 40 20% 98%;
+    --primary-foreground: 90 14% 98%;
 
-    /* Warm sand secondary */
-    --secondary: 40 16% 91%;
+    /* Soft neutral secondary */
+    --secondary: 120 8% 94%;
     --secondary-foreground: 154 40% 15%;
 
-    --muted: 40 12% 92%;
-    --muted-foreground: 160 10% 40%;
+    /* #6D7772 muted */
+    --muted: 120 6% 93%;
+    --muted-foreground: 156 5% 45%;
 
-    /* Precision sage accent */
-    --accent: 150 25% 92%;
+    /* #DDF3E1 soft green accent */
+    --accent: 131 48% 91%;
     --accent-foreground: 154 40% 15%;
 
-    --destructive: 0 72% 48%;
+    /* #D96B5F danger */
+    --destructive: 7 61% 61%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Architectural hairline borders */
-    --border: 40 14% 87%;
-    --input: 40 14% 86%;
-    --ring: 154 40% 25%;
+    /* #E4E9E5 hairline border */
+    --border: 132 10% 90%;
+    --input: 132 10% 90%;
+    /* #2D6A4F sage ring */
+    --ring: 154 41% 30%;
 
-    --radius: 0.375rem;
+    /* 10px radius per brief */
+    --radius: 0.625rem;
   }
 
   .dark {
@@ -82,7 +89,7 @@
   }
 }
 
-/* Subtle dot grid pattern for technical telemetry feel without heavy decoration */
+/* Subtle dot grid pattern, restrained decoration */
 .bg-grid-subtle {
   background-size: 24px 24px;
   background-image: radial-gradient(circle, rgba(22, 51, 38, 0.07) 1px, transparent 1px);
@@ -104,6 +111,37 @@
   animation: fadeIn 180ms ease-out forwards;
 }
 
+/* Success check draw-in for auth confirmation state */
+@keyframes checkDraw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-checkDraw {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: checkDraw 260ms ease-out 60ms forwards;
+}
+
+/* Slow, subtle rotation for the circular-flow visual */
+@keyframes flowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-flowSpin {
+  animation: flowSpin 48s linear infinite;
+  transform-origin: center;
+}
+
 /* Respect user's reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -114,4 +152,90 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Ensure reveal animations that start hidden still show their content. */
+  .animate-riseIn,
+  .animate-stepIn {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Metric value reveal on initial load — subtle rise + fade (150–250ms) */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-riseIn {
+  opacity: 0;
+  animation: riseIn 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Timeline step reveal — gentle slide from the leading edge */
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-stepIn {
+  opacity: 0;
+  animation: stepIn 200ms ease-out forwards;
+}
+
+/* Side panel slide-in from the right (match detail / receipt flow) */
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-panelIn {
+  animation: panelIn 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Backdrop fade for overlays */
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-overlayIn {
+  animation: overlayIn 160ms ease-out forwards;
+}
+
+/* Skeleton shimmer — subtle opacity pulse */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

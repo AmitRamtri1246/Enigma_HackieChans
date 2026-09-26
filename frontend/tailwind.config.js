@@ -48,15 +48,18 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Sustainability theme semantic extensions
+        // TraceIQ circular-economy palette (exact brief hex values)
         brand: {
-          stone: "#F8F7F4",
-          sand: "#EFECE6",
-          slate: "#0E1513",
+          canvas: "#F7F8F5",
+          white: "#FFFFFF",
+          ink: "#0E1513",
           forest: "#163326",
           sage: "#2D6A4F",
-          leaf: "#40916C",
-          clay: "#A39E93",
+          soft: "#DDF3E1",
+          accent: "#8BE28B",
+          muted: "#6D7772",
+          hairline: "#E4E9E5",
+          danger: "#D96B5F",
         },
       },
       borderRadius: {
