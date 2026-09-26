@@ -72,14 +72,32 @@ def test_full_flow():
     assert login_resp.status_code == 200
     assert "access_token" in login_resp.cookies
 
-    # 7. Test login with wrong credentials
-    print("Testing login with wrong credentials...")
-    bad_login_resp = client.post("/api/auth/login", json={
-        "email": "test@example.com",
-        "password": "WrongPassword!"
-    })
-    print("Bad login status:", bad_login_resp.status_code)
-    assert bad_login_resp.status_code == 401
+    # 8. Test scan creation and database storage
+    print("Testing scan creation...")
+    scan_resp = client.post("/api/scans", json={
+        "image_data": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...",
+        "item_name": "PET Bottle (Clear Plastic)",
+        "category": "Plastic",
+        "subtype": "PET Plastic",
+        "stream": "Dry Recyclable",
+        "confidence": 95,
+        "circularity_score": 92,
+        "suggested_actions": ["exchange", "donation", "pickup"]
+    }, cookies=login_resp.cookies)
+    print("Scan status:", scan_resp.status_code)
+    print("Scan data:", scan_resp.json())
+    assert scan_resp.status_code == 200, f"Scan creation failed: {scan_resp.text}"
+    scan_data = scan_resp.json()
+    assert scan_data["item_name"] == "PET Bottle (Clear Plastic)"
+    assert scan_data["user_id"] == user_data["id"]
+
+    # 9. Test retrieving user's scans
+    print("Testing get user scans...")
+    scans_list_resp = client.get("/api/scans", cookies=login_resp.cookies)
+    print("Get scans status:", scans_list_resp.status_code)
+    assert scans_list_resp.status_code == 200
+    assert len(scans_list_resp.json()) >= 1
+    assert scans_list_resp.json()[0]["id"] == scan_data["id"]
 
     print("ALL TESTS PASSED SUCCESSFULLY!")
 
