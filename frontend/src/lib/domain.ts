@@ -70,6 +70,9 @@ export interface Material {
   circularity: number;
   /** Suggested next actions, ordered by preference. */
   suggestedActions: ExchangeType[];
+  /** Optional representative image for scan preview. */
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 /** A material a citizen has published for reuse/exchange/collection. */
@@ -96,6 +99,12 @@ export interface MaterialListing {
   createdAt: string;
   /** Linked waste-passport id once the journey begins. */
   passportId?: string;
+  /** Primary product image URL. */
+  imageUrl?: string;
+  /** Accessible descriptive alt text. */
+  imageAlt?: string;
+  /** Display price / cost indicator, e.g. "Free", "$15", "Exchange". */
+  price?: string;
 }
 
 /* --------------------------- Organization ---------------------------- */
@@ -142,6 +151,13 @@ export interface Match {
   /** Illustrative material diverted, pre-formatted. */
   diverted: string;
   status: "Suggested" | "Requested" | "Accepted" | "Declined";
+  /** Item condition for marketplace card. */
+  condition?: ItemCondition;
+  /** Price or exchange model indicator ("Free", "Exchange", "Donation"). */
+  price?: string;
+  /** Representative product image. */
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 /** A citizen-to-citizen or citizen-to-org offer/request against a listing. */
@@ -252,6 +268,8 @@ export interface WastePassport {
   diverted: string;
   outcome?: MaterialOutcome;
   listingId?: string;
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 /* ------------------------------- Impact ------------------------------- */
@@ -315,4 +333,45 @@ export interface MapPoint {
   /** Relative position on the mock map, 0–100 for x and y. */
   x: number;
   y: number;
+}
+
+/* ------------------------------ Scanning ------------------------------ */
+
+/** The circular pathways a scanned item can be routed to. */
+export type ScanAction = "sell" | "exchange" | "donate" | "repair" | "recycle";
+
+export const SCAN_ACTIONS: ScanAction[] = [
+  "sell",
+  "exchange",
+  "donate",
+  "repair",
+  "recycle",
+];
+
+/**
+ * The typed result of analyzing a captured item image. Mirrors the shape the
+ * backend `POST /scan/analyze` endpoint returns so the mock and real service
+ * are interchangeable behind `scan-service.ts`.
+ *
+ * NOTE: environmental figures (circularityScore, estimatedWeightKg) are
+ * illustrative estimates, not measured values.
+ */
+export interface MaterialAnalysis {
+  materialName: string;
+  category: MaterialCategory;
+  condition: ItemCondition;
+  /** Detection confidence 0–1. */
+  confidence: number;
+  /** Illustrative circularity score 0–100. */
+  circularityScore: number;
+  /** Circular pathways, ordered by relevance. */
+  suggestedActions: ScanAction[];
+  /** The single most relevant action, if any. */
+  recommendedAction?: ScanAction;
+  /** Short preparation steps before handing the item on. */
+  preparationGuidance: string[];
+  /** Illustrative estimated weight in kg. */
+  estimatedWeightKg: number;
+  /** Optional pre-computed match ids (usually resolved later). */
+  matches: string[];
 }

@@ -1,101 +1,112 @@
 import React from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonCards } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader, Section } from "@/components/common/PageHeader";
+import { MetricStrip } from "@/components/common/DataDisplay";
 import { ErrorState } from "@/components/common/StateViews";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton, SkeletonStrip } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import { usePreviewRole } from "@/lib/use-preview-role";
-import type { ImpactMetric, ImpactTrendPoint, MaterialBreakdownItem } from "@/lib/domain";
+import type { ImpactTrendPoint } from "@/lib/domain";
 
+/** Impact — job: see what my actions added up to. Three numbers, one chart, one breakdown. */
 export const ImpactPage: React.FC = () => {
-  const { role } = usePreviewRole();
   const impact = useAsync(() => circularityService.getImpactSummary());
-  const activeId = role === "organization" ? "home" : "impact";
+  const data = impact.data;
 
   return (
-    <AppShell active={activeId} areaLabel={`${cap(role)} · Impact`}>
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <PageHeader title="Impact" subtitle="Your contribution to keeping materials in use." />
+    <AppShell active="impact" title="Impact">
+      <PageContainer>
+        <PageHeader title="Impact" subtitle="What keeping materials in use has added up to so far." />
 
         {impact.error ? (
           <ErrorState onRetry={impact.reload} />
-        ) : impact.isLoading || !impact.data ? (
-          <SkeletonCards count={3} />
+        ) : impact.isLoading || !data ? (
+          <>
+            <SkeletonStrip />
+            <Skeleton className="mt-12 h-56 w-full rounded-xl" />
+          </>
         ) : (
-          <div className="space-y-10">
-            {/* 3 metrics */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {impact.data.metrics.map((m, i) => <Metric key={m.id} metric={m} index={i} />)}
-            </div>
+          <>
+            <MetricStrip
+              metrics={data.metrics.map((m) => ({
+                label: m.label,
+                value: m.value,
+                unit: m.unit,
+                note: m.estimated ? "Illustrative estimate" : undefined,
+              }))}
+            />
 
-            {/* Simple trend chart */}
-            <section>
-              <h2 className="mb-4 text-base font-semibold tracking-tight text-foreground">Material diverted over time</h2>
-              <TrendChart points={impact.data.trend} />
-            </section>
+            <Section title="Material diverted per month" description="Kilograms kept out of landfill, last five months.">
+              <TrendChart points={data.trend} />
+            </Section>
 
-            {/* Breakdown */}
-            <section>
-              <h2 className="mb-4 text-base font-semibold tracking-tight text-foreground">By material</h2>
-              <div className="space-y-3 rounded-[10px] border border-border bg-card p-5">
-                {impact.data.breakdown.map((b) => <BreakdownRow key={b.category} item={b} />)}
-              </div>
-            </section>
-          </div>
+            <Section title="By material">
+              <Table>
+                <caption className="sr-only">Material breakdown</caption>
+                <TableHeader>
+                  <tr>
+                    <TableHead>Material</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="hidden w-[40%] sm:table-cell">Share</TableHead>
+                  </tr>
+                </TableHeader>
+                <TableBody>
+                  {data.breakdown.map((b) => (
+                    <TableRow key={b.category}>
+                      <TableCell className="font-medium">{b.category}</TableCell>
+                      <TableCell className="text-right font-mono">{b.amount}</TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <span className="flex items-center gap-3">
+                          <Progress value={b.percent} label={`${b.category} share`} />
+                          <span className="w-10 text-right font-mono text-[13px] text-muted-foreground">{b.percent}%</span>
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Section>
+          </>
         )}
-      </div>
+      </PageContainer>
     </AppShell>
   );
 };
 
-const Metric: React.FC<{ metric: ImpactMetric; index: number }> = ({ metric, index }) => (
-  <div className="motion-safe:animate-riseIn rounded-[10px] border border-border/80 bg-card p-5" style={{ animationDelay: `${index * 70}ms` }}>
-    <div className="flex items-baseline gap-1">
-      <span className="font-mono text-2xl font-medium tracking-tight text-brand-forest">{metric.value}</span>
-      {metric.unit && <span className="font-mono text-sm text-muted-foreground">{metric.unit}</span>}
-    </div>
-    <p className="mt-1 text-sm text-muted-foreground">
-      {metric.estimated && <span className="text-muted-foreground/80">Estimated </span>}
-      {metric.label}
-    </p>
-  </div>
-);
-
+/** One plain bar chart. The latest month is emphasised; values are labelled. */
 const TrendChart: React.FC<{ points: ImpactTrendPoint[] }> = ({ points }) => {
   const max = Math.max(...points.map((p) => p.value), 1);
+  const summary = points.map((p) => `${p.label} ${p.value} kg`).join(", ");
+
   return (
-    <div className="rounded-[10px] border border-border bg-card p-5">
-      <div className="flex items-end justify-between gap-3" style={{ height: 160 }}>
+    <figure className="rounded-xl border border-border bg-card px-5 pb-4 pt-6 sm:px-8">
+      <div role="img" aria-label={`Material diverted per month: ${summary}`} className="flex h-44 items-end gap-3 sm:gap-6">
+        {points.map((p, i) => {
+          const latest = i === points.length - 1;
+          return (
+            <div key={p.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+              <span className={cn("font-mono text-xs", latest ? "text-foreground" : "text-muted-foreground")}>{p.value}</span>
+              <div
+                className={cn(
+                  "w-full max-w-[44px] rounded-t-[4px] transition-[height] duration-500 ease-out",
+                  latest ? "bg-brand-forest" : "bg-brand-sage/35"
+                )}
+                style={{ height: `${Math.max(4, (p.value / max) * 100)}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex gap-3 border-t border-border pt-2 sm:gap-6" aria-hidden="true">
         {points.map((p) => (
-          <div key={p.label} className="flex flex-1 flex-col items-center justify-end gap-2">
-            <span className="font-mono text-[11px] text-muted-foreground">{p.value}</span>
-            <div
-              className="w-full max-w-[48px] rounded-t-md bg-brand-sage/85 transition-[height] duration-500 ease-out motion-reduce:transition-none"
-              style={{ height: `${(p.value / max) * 120}px` }}
-              aria-hidden="true"
-            />
-            <span className="text-[11px] text-muted-foreground">{p.label}</span>
-          </div>
+          <span key={p.label} className="flex-1 text-center text-xs text-muted-foreground">
+            {p.label}
+          </span>
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">Kilograms of material diverted per month · illustrative.</p>
-    </div>
+    </figure>
   );
 };
-
-const BreakdownRow: React.FC<{ item: MaterialBreakdownItem }> = ({ item }) => (
-  <div>
-    <div className="mb-1.5 flex items-center justify-between text-sm">
-      <span className="font-medium text-foreground">{item.category}</span>
-      <span className="font-mono text-muted-foreground">{item.amount}</span>
-    </div>
-    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-      <div className="h-full rounded-full bg-brand-sage transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${item.percent}%` }} aria-hidden="true" />
-    </div>
-  </div>
-);
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}

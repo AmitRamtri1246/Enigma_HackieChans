@@ -1,10 +1,12 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 
 interface ConfirmationDialogProps {
   open: boolean;
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
@@ -13,7 +15,7 @@ interface ConfirmationDialogProps {
   onCancel: () => void;
 }
 
-/** Accessible, focus-trapped confirmation dialog for consequential actions. */
+/** Confirmation for consequential actions, built on Dialog. */
 export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   open,
   title,
@@ -24,55 +26,29 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   loading = false,
   onConfirm,
   onCancel,
-}) => {
-  const confirmRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    confirmRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !loading) onCancel();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onCancel, loading]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[55] flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-title"
-    >
-      <button
-        type="button"
-        aria-label="Cancel"
-        onClick={() => !loading && onCancel()}
-        className="absolute inset-0 bg-brand-ink/40 motion-safe:animate-overlayIn"
-      />
-      <div className="relative w-full max-w-sm rounded-[12px] border border-border bg-card p-5 shadow-xl motion-safe:animate-fadeIn">
-        <h2 id="confirm-title" className="text-base font-semibold tracking-tight text-foreground">
-          {title}
-        </h2>
-        {description && (
-          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{description}</p>
-        )}
-        <div className="mt-5 flex items-center justify-end gap-2.5">
-          <Button variant="ghost" onClick={onCancel} disabled={loading}>
-            {cancelLabel}
-          </Button>
-          <Button
-            ref={confirmRef}
-            variant={destructive ? "destructive" : "default"}
-            onClick={onConfirm}
-            disabled={loading}
-          >
-            {loading ? "Working…" : confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
+}) => (
+  <Dialog
+    open={open}
+    onClose={onCancel}
+    title={title}
+    description={description}
+    busy={loading}
+    footer={
+      <>
+        <Button variant="outline" onClick={onCancel} disabled={loading}>
+          {cancelLabel}
+        </Button>
+        <Button
+          data-autofocus
+          variant={destructive ? "destructive" : "default"}
+          onClick={onConfirm}
+          disabled={loading}
+          className="gap-2"
+        >
+          {loading && <Loader2 className="h-4 w-4 motion-safe:animate-spin" />}
+          {confirmLabel}
+        </Button>
+      </>
+    }
+  />
+);

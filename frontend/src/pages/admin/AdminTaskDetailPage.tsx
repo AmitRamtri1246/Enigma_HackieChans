@@ -1,94 +1,157 @@
 import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonList } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { DetailList, MaterialThumb } from "@/components/common/DataDisplay";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
-import { StatusBadge, toneFor } from "@/components/common/StatusBadge";
+import { PriorityLabel, StatusBadge } from "@/components/common/StatusBadge";
 import { useToast } from "@/components/common/ToastProvider";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useAsync } from "@/lib/use-async";
 import { circularityService, AVAILABLE_COLLECTORS } from "@/lib/circularity-service";
-import { ArrowLeft, ClipboardList, MapPin, PackageCheck, Truck, Check, Loader2 } from "lucide-react";
+import { Check, ClipboardList, Loader2 } from "lucide-react";
 
+/** Admin task detail — job: assign the right collector. */
 export const AdminTaskDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { id = "" } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const task = useAsync(() => circularityService.getPickupTask(id ?? ""), [id]);
+  const task = useAsync(() => circularityService.getPickupTask(id), [id]);
+  const tasks = useAsync(() => circularityService.getPickupTasks());
 
-  const [selected, setSelected] = useState<string>(AVAILABLE_COLLECTORS[0]);
+  const [selected, setSelected] = useState(AVAILABLE_COLLECTORS[0]);
   const [busy, setBusy] = useState(false);
+  const t = task.data;
+
+  // Current open workload per collector, to help pick.
+  const load = (name: string) =>
+    (tasks.data ?? []).filter((x) => x.collector === name && (x.status === "Assigned" || x.status === "Collected")).length;
 
   const assign = async () => {
-    if (!task.data) return;
+    if (!t) return;
     setBusy(true);
-    await circularityService.assignCollector(task.data.id, selected);
+    await circularityService.assignCollector(t.id, selected);
     setBusy(false);
-    toast(`Assigned to ${selected}. The task now appears in their pickups.`);
+    toast(`Assigned to ${selected}. It's now in their task list.`);
   };
 
   return (
-    <AppShell active="tasks" areaLabel="Municipality · Task">
-      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-        <button type="button" onClick={() => navigate("/admin/tasks")} className="mb-5 inline-flex items-center gap-1.5 rounded px-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Collection Tasks
-        </button>
-
+    <AppShell active="tasks" title={t?.material ?? "Task"}>
+      <PageContainer>
         {task.error ? (
           <ErrorState onRetry={task.reload} />
         ) : task.isLoading ? (
           <SkeletonList rows={3} />
-        ) : !task.data ? (
-          <EmptyState icon={ClipboardList} title="Task not found." action={<Button variant="outline" onClick={() => navigate("/admin/tasks")}>All tasks</Button>} />
+        ) : !t ? (
+          <EmptyState
+            icon={ClipboardList}
+            title="Task not found."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/admin/tasks">All tasks</Link>
+              </Button>
+            }
+          />
         ) : (
           <>
             <PageHeader
-              title={task.data.material}
-              subtitle={`Est. ${task.data.estimatedQuantity} · ${task.data.window}`}
-              action={<StatusBadge label={task.data.status} tone={toneFor(task.data.status)} />}
+              back={{ label: "Collection Tasks", to: "/admin/tasks" }}
+              title={`${t.material} pickup`}
+              meta={<StatusBadge status={t.status} />}
+              subtitle={<span className="font-mono text-[15px]">{t.window}</span>}
             />
 
-            <dl className="grid grid-cols-1 gap-2 rounded-[10px] border border-border bg-card p-4 text-sm sm:grid-cols-2">
-              <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-brand-sage" /><span className="text-muted-foreground">Pickup:</span><span className="font-medium text-foreground">{task.data.pickupArea}</span></div>
-              <div className="flex items-center gap-2"><PackageCheck className="h-4 w-4 text-brand-sage" /><span className="text-muted-foreground">Destination:</span><span className="font-medium text-foreground">{task.data.destination}</span></div>
-              <div className="flex items-center gap-2"><span className="text-muted-foreground">Priority:</span><StatusBadge label={task.data.priority} tone={toneFor(task.data.priority)} /></div>
-              {task.data.actualQuantity && <div className="flex items-center gap-2"><span className="text-muted-foreground">Collected:</span><span className="font-mono font-medium text-foreground">{task.data.actualQuantity}</span></div>}
-            </dl>
+            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <section aria-labelledby="assign-h" className="min-w-0">
+                <h2 id="assign-h" className="text-lg font-semibold tracking-tight text-foreground">
+                  {t.collector ? "Collector" : "Assign a collector"}
+                </h2>
 
-            {/* Assignment */}
-            <section className="mt-8 rounded-[10px] border border-border bg-card p-5">
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">Assign a collector</h2>
-              {task.data.collector ? (
-                <p className="mt-2 flex items-center gap-2 text-sm text-foreground">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-soft text-brand-sage"><Check className="h-3.5 w-3.5 stroke-[3]" /></span>
-                  Assigned to <span className="font-medium">{task.data.collector}</span>
-                </p>
-              ) : (
-                <div className="mt-3 space-y-4">
-                  <fieldset className="space-y-2">
-                    <legend className="sr-only">Choose a collector</legend>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      {AVAILABLE_COLLECTORS.map((c) => (
-                        <button key={c} type="button" role="radio" aria-checked={selected === c} onClick={() => setSelected(c)}
-                          className={cn("flex items-center justify-between rounded-[10px] border px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            selected === c ? "border-brand-forest bg-brand-soft/60 font-medium text-brand-forest" : "border-border text-foreground hover:border-brand-sage/50 hover:bg-accent/40")}>
-                          {c}{selected === c && <Check className="h-4 w-4 text-brand-sage" />}
-                        </button>
-                      ))}
+                {t.collector ? (
+                  <p className="mt-3 flex items-center gap-2 text-[15px] text-foreground">
+                    <Check className="h-4 w-4 text-brand-sage" strokeWidth={2.5} aria-hidden="true" />
+                    <span>
+                      <span className="font-medium">{t.collector}</span> is handling this pickup.
+                    </span>
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm text-muted-foreground">The task appears in the collector's list as soon as you assign it.</p>
+                    <div role="radiogroup" aria-label="Collector" className="mt-5 divide-y divide-border/80 overflow-hidden rounded-xl border border-border bg-card">
+                      {AVAILABLE_COLLECTORS.map((name) => {
+                        const checked = selected === name;
+                        const open = load(name);
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            role="radio"
+                            aria-checked={checked}
+                            onClick={() => setSelected(name)}
+                            className={cn(
+                              "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
+                              checked ? "bg-brand-soft/40" : "hover:bg-secondary/40"
+                            )}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                                checked ? "border-brand-forest" : "border-input"
+                              )}
+                            >
+                              {checked && <span className="h-2 w-2 rounded-full bg-brand-forest" />}
+                            </span>
+                            <span className="flex-1 text-sm font-medium text-foreground">{name}</span>
+                            <span className="text-[13px] text-muted-foreground">
+                              <span className="font-mono">{open}</span> open {open === 1 ? "task" : "tasks"}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </fieldset>
-                  <Button onClick={assign} disabled={busy} className="gap-2">
-                    {busy ? <><Loader2 className="h-4 w-4 motion-safe:animate-spin" />Assigning…</> : <><Truck className="h-4 w-4" />Assign collector</>}
-                  </Button>
-                </div>
-              )}
-            </section>
+                    <Button onClick={assign} disabled={busy} className="mt-5 gap-2">
+                      {busy && <Loader2 className="h-4 w-4 motion-safe:animate-spin" />}
+                      Assign {selected.split(" ")[0]}
+                    </Button>
+                  </>
+                )}
+              </section>
+
+              <aside className="lg:sticky lg:top-20 lg:self-start">
+                <Card className="p-5">
+                  <div className="mb-5 flex items-center gap-3">
+                    <MaterialThumb category={t.category} size="md" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{t.material}</p>
+                      <p className="text-[13px] text-muted-foreground">{t.category}</p>
+                    </div>
+                  </div>
+                  <DetailList
+                    items={[
+                      { label: "Pickup", value: t.pickupArea },
+                      { label: "Deliver to", value: t.destination },
+                      { label: "Estimated", value: t.estimatedQuantity, mono: true },
+                      ...(t.actualQuantity ? [{ label: "Collected", value: t.actualQuantity, mono: true }] : []),
+                      { label: "Priority", value: <PriorityLabel priority={t.priority} /> },
+                    ]}
+                  />
+                  {t.passportId && (
+                    <Link
+                      to={`/passports/${t.passportId}`}
+                      className="mt-5 inline-block rounded-md text-sm font-medium text-brand-sage transition-colors hover:text-brand-forest focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      View Waste Passport
+                    </Link>
+                  )}
+                </Card>
+              </aside>
+            </div>
           </>
         )}
-      </div>
+      </PageContainer>
     </AppShell>
   );
 };

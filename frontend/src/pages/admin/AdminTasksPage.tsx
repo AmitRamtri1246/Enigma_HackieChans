@@ -1,54 +1,81 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonList } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { ItemCell } from "@/components/common/DataDisplay";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
-import { StatusBadge, toneFor } from "@/components/common/StatusBadge";
+import { PriorityLabel, StatusBadge } from "@/components/common/StatusBadge";
+import { SkeletonTable } from "@/components/ui/skeleton";
+import { TabsList, TabsPanel } from "@/components/ui/tabs";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import { cn } from "@/lib/utils";
 import type { PickupTask } from "@/lib/domain";
-import { ClipboardList, ChevronRight } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
+type Filter = "unassigned" | "active" | "done";
+
+/** Collection Tasks — job: make sure every pickup has a collector. */
 export const AdminTasksPage: React.FC = () => {
-  const navigate = useNavigate();
   const tasks = useAsync(() => circularityService.getPickupTasks());
+  const all = tasks.data ?? [];
+  const unassigned = all.filter((t) => t.status === "Unassigned");
+  const active = all.filter((t) => t.status === "Assigned" || t.status === "Collected");
+  const done = all.filter((t) => t.status === "Delivered");
+  const [filter, setFilter] = useState<Filter>("unassigned");
+  const rows = filter === "unassigned" ? unassigned : filter === "active" ? active : done;
+
+  const columns: Column<PickupTask>[] = [
+    { id: "item", header: "Material", mobile: "primary", cell: (t) => <ItemCell category={t.category} title={t.material} sub={<span className="font-mono">{t.estimatedQuantity}</span>} /> },
+    {
+      id: "route",
+      header: "Route",
+      cell: (t) => (
+        <span className="text-sm">
+          {t.pickupArea} <span className="text-muted-foreground" aria-label="to">→</span> {t.destination}
+        </span>
+      ),
+    },
+    { id: "window", header: "Window", mobile: "hidden", cell: (t) => <span className="font-mono text-[13px] text-muted-foreground">{t.window}</span> },
+    { id: "priority", header: "Priority", cell: (t) => <PriorityLabel priority={t.priority} /> },
+    {
+      id: "collector",
+      header: filter === "unassigned" ? "Status" : "Collector",
+      mobile: "trailing",
+      cell: (t) => (t.collector ? <span className="text-sm">{t.collector}</span> : <StatusBadge status="Unassigned" />),
+    },
+  ];
 
   return (
-    <AppShell active="tasks" areaLabel="Municipality · Tasks">
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <PageHeader title="Collection Tasks" subtitle="Assign collectors and track pickups across the area." />
+    <AppShell active="tasks">
+      <PageContainer>
+        <PageHeader title="Collection Tasks" subtitle="Pickups created when organizations accept a match." />
 
-        {tasks.error ? (
-          <ErrorState onRetry={tasks.reload} />
-        ) : tasks.isLoading ? (
-          <SkeletonList rows={4} />
-        ) : (tasks.data ?? []).length === 0 ? (
-          <EmptyState icon={ClipboardList} title="No collection tasks." />
-        ) : (
-          <ul className="overflow-hidden rounded-[10px] border border-border bg-card">
-            {(tasks.data ?? []).map((t, i) => <TaskRow key={t.id} task={t} last={i === (tasks.data ?? []).length - 1} onOpen={() => navigate(`/admin/tasks/${t.id}`)} />)}
-          </ul>
-        )}
-      </div>
+        <TabsList<Filter>
+          idBase="admin-tasks"
+          label="Task status"
+          value={filter}
+          onValueChange={setFilter}
+          items={[
+            { value: "unassigned", label: "Unassigned", count: unassigned.length },
+            { value: "active", label: "In progress", count: active.length },
+            { value: "done", label: "Delivered", count: done.length },
+          ]}
+        />
+        <TabsPanel idBase="admin-tasks" value={filter} className="pt-6">
+          {tasks.error ? (
+            <ErrorState onRetry={tasks.reload} />
+          ) : tasks.isLoading ? (
+            <SkeletonTable rows={3} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={ClipboardList}
+              title={filter === "unassigned" ? "Every pickup has a collector." : filter === "active" ? "No pickups in progress." : "No deliveries yet."}
+            />
+          ) : (
+            <DataTable label="Collection tasks" columns={columns} rows={rows} rowKey={(t) => t.id} rowHref={(t) => `/admin/tasks/${t.id}`} />
+          )}
+        </TabsPanel>
+      </PageContainer>
     </AppShell>
   );
 };
-
-const TaskRow: React.FC<{ task: PickupTask; last: boolean; onOpen: () => void }> = ({ task, last, onOpen }) => (
-  <li className={cn(!last && "border-b border-border/70")}>
-    <button type="button" onClick={onOpen} className="flex w-full items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring sm:px-5">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{task.material}</p>
-        <p className="text-xs text-muted-foreground">
-          <span className="font-mono">{task.estimatedQuantity}</span> · {task.pickupArea}
-          {task.collector && <> · {task.collector}</>}
-        </p>
-      </div>
-      <StatusBadge label={task.priority} tone={toneFor(task.priority)} dot={false} />
-      <StatusBadge label={task.status} tone={toneFor(task.status)} />
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-    </button>
-  </li>
-);

@@ -1,64 +1,52 @@
 import React from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonList } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { ItemCell } from "@/components/common/DataDisplay";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
-import { StatusBadge, toneFor } from "@/components/common/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { SkeletonTable } from "@/components/ui/skeleton";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
+import { formatDate } from "@/lib/format";
 import type { WastePassport } from "@/lib/domain";
-import { Building2 } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 
+/** Receipts — job: a record of what arrived and what became of it. */
 export const OrgReceiptsPage: React.FC = () => {
-  // Receipts are completed passports the organization has received.
   const passports = useAsync(() => circularityService.getWastePassports());
   const received = (passports.data ?? []).filter((p) => p.currentStage === "Completed");
 
+  const receivedOn = (p: WastePassport) => {
+    const evt = p.timeline.find((e) => e.stage === "Received") ?? p.timeline[p.timeline.length - 1];
+    return formatDate(evt?.date ?? "");
+  };
+
+  const columns: Column<WastePassport>[] = [
+    { id: "item", header: "Material", mobile: "primary", cell: (p) => <ItemCell category={p.category} title={p.material} sub={`From ${p.owner}`} /> },
+    { id: "qty", header: "Received", cell: (p) => <span className="font-mono">{p.quantity}</span> },
+    { id: "date", header: "Date", cell: (p) => <span className="font-mono">{receivedOn(p)}</span> },
+    { id: "co2", header: "Est. CO₂e", align: "right", mobile: "hidden", cell: (p) => <span className="font-mono text-muted-foreground">{p.co2eEstimate} kg</span> },
+    { id: "outcome", header: "Outcome", mobile: "trailing", cell: (p) => (p.outcome ? <StatusBadge status={p.outcome} /> : null) },
+  ];
+
   return (
     <AppShell active="receipts">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <PageHeader
-          title="Receipts"
-          subtitle="Materials your organization has received and processed."
-        />
-
+      <PageContainer>
+        <PageHeader title="Receipts" subtitle="Materials EcoPack has received and what they became." />
         {passports.error ? (
           <ErrorState onRetry={passports.reload} />
         ) : passports.isLoading ? (
-          <SkeletonList rows={3} />
+          <SkeletonTable rows={3} />
         ) : received.length === 0 ? (
-          <EmptyState
-            icon={Building2}
-            title="No receipts yet."
-            description="Confirmed materials will appear here once received."
-          />
+          <EmptyState icon={ClipboardCheck} title="No receipts yet." description="Accept a match and confirm what arrived to record it here." />
         ) : (
-          <ul className="overflow-hidden rounded-[10px] border border-border bg-card">
-            {received.map((p, i, arr) => (
-              <ReceiptRow key={p.id} passport={p} last={i === arr.length - 1} />
-            ))}
-          </ul>
+          <>
+            <DataTable label="Receipts" columns={columns} rows={received} rowKey={(p) => p.id} rowHref={(p) => `/passports/${p.id}`} />
+            <p className="mt-3 text-xs text-muted-foreground">CO₂e values are illustrative estimates.</p>
+          </>
         )}
-      </div>
+      </PageContainer>
     </AppShell>
   );
 };
-
-const ReceiptRow: React.FC<{ passport: WastePassport; last: boolean }> = ({ passport, last }) => (
-  <li
-    className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-4 sm:px-5 ${
-      last ? "" : "border-b border-border/70"
-    }`}
-  >
-    <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium text-foreground">{passport.material}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        <span className="font-mono">{passport.quantity}</span> · {passport.category}
-      </p>
-    </div>
-    {passport.outcome && <StatusBadge label={passport.outcome} tone={toneFor(passport.outcome)} />}
-    <span className="font-mono text-xs text-muted-foreground">
-      {passport.co2eEstimate} kg CO₂e
-    </span>
-  </li>
-);
