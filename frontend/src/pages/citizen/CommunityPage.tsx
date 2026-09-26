@@ -1,74 +1,94 @@
-import React from "react";
+import React, { useState } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonList } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { TabsList, TabsPanel } from "@/components/ui/tabs";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import { usePreviewRole } from "@/lib/use-preview-role";
 import type { CommunityActivity, CommunityEventKind } from "@/lib/domain";
-import { Gift, Search, Sprout, UserPlus, Building2, User, type LucideIcon } from "lucide-react";
+import { Users } from "lucide-react";
 
-const KIND_META: Record<CommunityEventKind, { icon: LucideIcon; verb: string }> = {
-  offer: { icon: Gift, verb: "offered" },
-  request: { icon: Search, verb: "is looking for" },
-  reused: { icon: Sprout, verb: "reused" },
-  joined: { icon: UserPlus, verb: "joined the community" },
+type Filter = "all" | "offer" | "request";
+
+const VERB: Record<CommunityEventKind, string> = {
+  offer: "offered",
+  request: "is looking for",
+  reused: "gave a second life to",
+  joined: "joined the community",
 };
 
+/** Community — a lightweight feed of what neighbours are offering and asking for. */
 export const CommunityPage: React.FC = () => {
-  const { role } = usePreviewRole();
   const activity = useAsync(() => circularityService.getCommunityActivity());
-  const activeId = role === "organization" ? "community" : "community";
+  const [filter, setFilter] = useState<Filter>("all");
+  const rows = (activity.data ?? []).filter((a) => filter === "all" || a.kind === filter);
 
   return (
-    <AppShell active={activeId} areaLabel={`${cap(role)} · Community`}>
-      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-        <PageHeader title="Community" subtitle="What your neighborhood is reusing and exchanging." />
+    <AppShell active="community" title="Community">
+      <PageContainer size="narrow">
+        <PageHeader title="Community" subtitle="What residents and organizations nearby are offering and asking for." />
 
-        {activity.error ? (
-          <ErrorState onRetry={activity.reload} />
-        ) : activity.isLoading ? (
-          <SkeletonList rows={5} />
-        ) : (activity.data ?? []).length === 0 ? (
-          <EmptyState title="No community activity yet." description="Offers, requests and reuse events show up here." />
-        ) : (
-          <ol className="overflow-hidden rounded-[10px] border border-border bg-card">
-            {(activity.data ?? []).map((a, i) => (
-              <ActivityRow key={a.id} activity={a} last={i === (activity.data ?? []).length - 1} />
-            ))}
-          </ol>
-        )}
-      </div>
+        <TabsList<Filter>
+          idBase="community"
+          label="Filter activity"
+          value={filter}
+          onValueChange={setFilter}
+          items={[
+            { value: "all", label: "All" },
+            { value: "offer", label: "Offers" },
+            { value: "request", label: "Requests" },
+          ]}
+        />
+
+        <TabsPanel idBase="community" value={filter} className="pt-2">
+          {activity.error ? (
+            <div className="pt-4"><ErrorState onRetry={activity.reload} /></div>
+          ) : activity.isLoading ? (
+            <div className="pt-4"><SkeletonList rows={5} /></div>
+          ) : rows.length === 0 ? (
+            <div className="pt-4"><EmptyState icon={Users} title="Nothing here yet." description="Offers and requests from your area will appear here." /></div>
+          ) : (
+            <ol className="divide-y divide-border/80">
+              {rows.map((a) => (
+                <FeedItem key={a.id} activity={a} />
+              ))}
+            </ol>
+          )}
+        </TabsPanel>
+      </PageContainer>
     </AppShell>
   );
 };
 
-const ActivityRow: React.FC<{ activity: CommunityActivity; last: boolean }> = ({ activity, last }) => {
-  const meta = KIND_META[activity.kind];
-  const Icon = meta.icon;
-  const ActorIcon = activity.actorType === "Organization" ? Building2 : User;
+const FeedItem: React.FC<{ activity: CommunityActivity }> = ({ activity }) => {
+  const initials = activity.actor
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const org = activity.actorType === "Organization";
   return (
-    <li className={`flex items-center gap-3 px-4 py-3.5 ${last ? "" : "border-b border-border/60"}`}>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft/70 text-brand-sage">
-        <Icon className="h-4 w-4" strokeWidth={2} />
+    <li className="flex items-start gap-3.5 py-4">
+      <span
+        aria-hidden="true"
+        className={
+          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-xs font-semibold " +
+          (org ? "rounded-md bg-brand-forest text-brand-white" : "rounded-full bg-secondary text-foreground")
+        }
+      >
+        {initials}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-foreground">
-          <span className="font-medium">{activity.actor}</span>{" "}
-          <span className="text-muted-foreground">{meta.verb}</span>{" "}
-          {activity.material && <span className="font-medium">{activity.material}</span>}
+        <p className="text-[15px] leading-6 text-foreground">
+          <span className="font-medium">{activity.actor}</span> <span className="text-muted-foreground">{VERB[activity.kind]}</span>
+          {activity.material && <span className="font-medium"> {activity.material}</span>}
         </p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-          <ActorIcon className="h-3 w-3" />
-          {activity.actorType}
+        <p className="text-[13px] text-muted-foreground">
+          {activity.actorType} · {activity.when}
         </p>
       </div>
-      <span className="shrink-0 text-xs text-muted-foreground">{activity.when}</span>
     </li>
   );
 };
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}

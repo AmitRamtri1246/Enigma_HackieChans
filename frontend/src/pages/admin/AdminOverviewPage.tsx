@@ -1,105 +1,148 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonCards } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader, Section, TextLink } from "@/components/common/PageHeader";
+import { ItemCell, MetricStrip, RowItem, RowList } from "@/components/common/DataDisplay";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
-import { StatusBadge, toneFor } from "@/components/common/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+import { SkeletonList, SkeletonStrip, SkeletonTable } from "@/components/ui/skeleton";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
+import { binTone } from "@/lib/format";
 import type { PickupTask, SmartBin } from "@/lib/domain";
-import { Trash2, ClipboardList, ArrowRight, AlertTriangle } from "lucide-react";
+import { CheckCircle2, ClipboardList, Trash2 } from "lucide-react";
 
+const COLLECTED_STAGES = ["Collected", "Delivered", "Received", "Completed"];
+
+/**
+ * Municipality Overview — exception monitoring.
+ * 3 metrics → what needs attention → tasks → bins.
+ */
 export const AdminOverviewPage: React.FC = () => {
-  const navigate = useNavigate();
   const tasks = useAsync(() => circularityService.getPickupTasks());
   const bins = useAsync(() => circularityService.getSmartBins());
   const passports = useAsync(() => circularityService.getWastePassports());
 
-  const isLoading = tasks.isLoading || bins.isLoading || passports.isLoading;
-  const hasError = tasks.error || bins.error || passports.error;
-
-  const collected = (passports.data ?? []).filter((p) => ["Collected", "Delivered", "Received", "Completed"].includes(p.currentStage)).length;
-  const reused = (passports.data ?? []).filter((p) => p.currentStage === "Completed").length;
-  const attentionBins = (bins.data ?? []).filter((b) => b.priority === "High");
+  const collected = (passports.data ?? []).filter((p) => COLLECTED_STAGES.includes(p.currentStage)).length;
+  const completed = (passports.data ?? []).filter((p) => p.currentStage === "Completed").length;
+  const hotBins = (bins.data ?? []).filter((b) => b.priority === "High" || b.fillLevel >= 85).sort((a, b) => a.overflowEstimateHrs - b.overflowEstimateHrs);
   const unassigned = (tasks.data ?? []).filter((t) => t.status === "Unassigned");
+  const loading = tasks.isLoading || bins.isLoading || passports.isLoading;
+
+  const taskColumns: Column<PickupTask>[] = [
+    { id: "item", header: "Material", mobile: "primary", cell: (t) => <ItemCell category={t.category} title={t.material} sub={t.pickupArea} /> },
+    { id: "qty", header: "Est.", cell: (t) => <span className="font-mono">{t.estimatedQuantity}</span> },
+    { id: "collector", header: "Collector", cell: (t) => (t.collector ? t.collector : <span className="text-muted-foreground">Unassigned</span>) },
+    { id: "status", header: "Status", mobile: "trailing", cell: (t) => <StatusBadge status={t.status} /> },
+  ];
+
+  const binColumns: Column<SmartBin>[] = [
+    { id: "area", header: "Bin", mobile: "primary", cell: (b) => <span className="font-medium">{b.area}</span> },
+    { id: "cat", header: "Stream", cell: (b) => <span className="text-muted-foreground">{b.category}</span> },
+    {
+      id: "fill",
+      header: "Fill level",
+      mobile: "trailing",
+      className: "w-56",
+      cell: (b) => (
+        <span className="flex items-center gap-3">
+          <Progress value={b.fillLevel} label={`${b.area} fill level`} tone={binTone(b.fillLevel)} className="hidden w-28 sm:block" />
+          <span className="w-10 text-right font-mono text-sm">{b.fillLevel}%</span>
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <AppShell active="overview" areaLabel="Municipality">
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <PageHeader title="Riverside Municipality" subtitle="Coordinate collection and keep materials circulating." />
+    <AppShell active="overview" title="Overview">
+      <PageContainer>
+        <PageHeader title="Overview" subtitle="Riverside collection network. Seeded demo data, not live sensors." />
 
-        {hasError ? (
-          <ErrorState onRetry={() => { tasks.reload(); bins.reload(); passports.reload(); }} />
-        ) : isLoading ? (
-          <SkeletonCards count={3} />
+        {passports.error ? (
+          <ErrorState onRetry={passports.reload} />
+        ) : loading ? (
+          <SkeletonStrip />
         ) : (
-          <>
-            {/* 3 metrics */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Metric value={String(collected)} label="Materials collected" />
-              <Metric value={String(reused)} label="Reused / recycled" />
-              <Metric value={String(attentionBins.length + unassigned.length)} label="Needs attention" />
-            </div>
-
-            {/* Needs attention */}
-            <section className="mt-10" aria-labelledby="attn-h">
-              <div className="mb-4 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-brand-danger" />
-                <h2 id="attn-h" className="text-base font-semibold tracking-tight text-foreground">Needs attention</h2>
-              </div>
-
-              {attentionBins.length === 0 && unassigned.length === 0 ? (
-                <EmptyState title="Everything's under control." description="No high-priority bins or unassigned tasks right now." />
-              ) : (
-                <div className="space-y-3">
-                  {attentionBins.map((b) => <AttnBin key={b.id} bin={b} onOpen={() => navigate("/admin/bins")} />)}
-                  {unassigned.map((t) => <AttnTask key={t.id} task={t} onAssign={() => navigate(`/admin/tasks/${t.id}`)} />)}
-                </div>
-              )}
-            </section>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button variant="outline" className="gap-1.5" onClick={() => navigate("/admin/tasks")}><ClipboardList className="h-4 w-4" />Collection tasks</Button>
-              <Button variant="outline" className="gap-1.5" onClick={() => navigate("/admin/bins")}><Trash2 className="h-4 w-4" />Smart bins</Button>
-            </div>
-          </>
+          <MetricStrip
+            metrics={[
+              { label: "Materials collected", value: String(collected) },
+              { label: "Reused or recycled", value: String(completed) },
+              { label: "Need attention", value: String(hotBins.length + unassigned.length) },
+            ]}
+          />
         )}
-      </div>
+
+        <Section title="Needs attention" description="Bins close to overflow and pickups without a collector.">
+          {tasks.error || bins.error ? (
+            <ErrorState onRetry={() => { tasks.reload(); bins.reload(); }} />
+          ) : loading ? (
+            <SkeletonList rows={3} />
+          ) : hotBins.length + unassigned.length === 0 ? (
+            <EmptyState icon={CheckCircle2} title="Nothing needs attention." description="All bins are below threshold and every pickup has a collector." />
+          ) : (
+            <RowList label="Needs attention">
+              {unassigned.map((t) => (
+                <RowItem
+                  key={t.id}
+                  leading={<span className="flex h-10 w-10 items-center justify-center rounded-md bg-[#F5EFE2] text-[#7A5A1C]"><ClipboardList className="h-[18px] w-[18px]" aria-hidden="true" /></span>}
+                  title={`${t.material} pickup has no collector`}
+                  meta={
+                    <>
+                      {t.pickupArea} · <span className="font-mono">{t.estimatedQuantity}</span> · {t.window}
+                    </>
+                  }
+                  trailing={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/admin/tasks/${t.id}`}>Assign</Link>
+                    </Button>
+                  }
+                />
+              ))}
+              {hotBins.map((b) => (
+                <RowItem
+                  key={b.id}
+                  to="/admin/bins"
+                  leading={<span className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-danger/10 text-[#A4463B]"><Trash2 className="h-[18px] w-[18px]" aria-hidden="true" /></span>}
+                  title={`${b.area} bin at ${b.fillLevel}%`}
+                  meta={
+                    <>
+                      {b.category} · overflow in ~<span className="font-mono">{b.overflowEstimateHrs}h</span> (est.)
+                    </>
+                  }
+                />
+              ))}
+            </RowList>
+          )}
+        </Section>
+
+        <Section title="Collection tasks" action={<TextLink to="/admin/tasks">View all</TextLink>}>
+          {tasks.error ? (
+            <ErrorState onRetry={tasks.reload} />
+          ) : tasks.isLoading ? (
+            <SkeletonTable rows={3} />
+          ) : (
+            <DataTable label="Collection tasks" columns={taskColumns} rows={(tasks.data ?? []).slice(0, 5)} rowKey={(t) => t.id} rowHref={(t) => `/admin/tasks/${t.id}`} />
+          )}
+        </Section>
+
+        <Section title="Smart bins" action={<TextLink to="/admin/bins">View all</TextLink>}>
+          {bins.error ? (
+            <ErrorState onRetry={bins.reload} />
+          ) : bins.isLoading ? (
+            <SkeletonTable rows={3} />
+          ) : (
+            <DataTable
+              label="Smart bins by fill level"
+              columns={binColumns}
+              rows={[...(bins.data ?? [])].sort((a, b) => b.fillLevel - a.fillLevel).slice(0, 4)}
+              rowKey={(b) => b.id}
+            />
+          )}
+        </Section>
+      </PageContainer>
     </AppShell>
   );
 };
-
-const Metric: React.FC<{ value: string; label: string }> = ({ value, label }) => (
-  <div className="rounded-[10px] border border-border/80 bg-card p-5">
-    <p className="font-mono text-2xl font-medium tracking-tight text-brand-forest">{value}</p>
-    <p className="mt-1 text-sm text-muted-foreground">{label}</p>
-  </div>
-);
-
-const AttnBin: React.FC<{ bin: SmartBin; onOpen: () => void }> = ({ bin, onOpen }) => (
-  <div className="flex items-center gap-3 rounded-[10px] border border-border bg-card px-4 py-3.5">
-    <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", bin.fillLevel >= 85 ? "bg-destructive/10 text-destructive" : "bg-brand-soft text-brand-sage")}>
-      <Trash2 className="h-4 w-4" />
-    </span>
-    <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium text-foreground">{bin.area}</p>
-      <p className="text-xs text-muted-foreground"><span className="font-mono">{bin.fillLevel}%</span> full · overflow in ~<span className="font-mono">{bin.overflowEstimateHrs}h</span> (est.)</p>
-    </div>
-    <StatusBadge label={bin.priority} tone={toneFor(bin.priority)} />
-    <button type="button" onClick={onOpen} className="rounded px-1 text-sm font-medium text-brand-sage transition-colors hover:text-brand-forest focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">View</button>
-  </div>
-);
-
-const AttnTask: React.FC<{ task: PickupTask; onAssign: () => void }> = ({ task, onAssign }) => (
-  <div className="flex items-center gap-3 rounded-[10px] border border-border bg-card px-4 py-3.5">
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand-sage"><ClipboardList className="h-4 w-4" /></span>
-    <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium text-foreground">{task.material}</p>
-      <p className="text-xs text-muted-foreground"><span className="font-mono">{task.estimatedQuantity}</span> · {task.pickupArea} · unassigned</p>
-    </div>
-    <Button size="sm" variant="outline" onClick={onAssign} className="gap-1.5">Assign<ArrowRight className="h-3.5 w-3.5" /></Button>
-  </div>
-);

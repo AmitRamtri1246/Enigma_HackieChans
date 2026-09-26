@@ -1,114 +1,162 @@
 import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { Button } from "@/components/ui/button";
-import { SkeletonList } from "@/components/ui/skeleton";
-import { ErrorState, EmptyState } from "@/components/common/StateViews";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { DetailList, MaterialThumb } from "@/components/common/DataDisplay";
+import { EmptyState, ErrorState } from "@/components/common/StateViews";
+import { ConfirmationDialog } from "@/components/common/ConfirmationDialog";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { useToast } from "@/components/common/ToastProvider";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import { ArrowLeft, MapPin, Check, Leaf, Loader2 } from "lucide-react";
+import { OFFER_LABEL } from "@/lib/format";
+import { Check } from "lucide-react";
 
+/** Match detail — job: understand why this is a good destination, then offer the item. */
 export const MatchDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { id = "" } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const match = useAsync(() => circularityService.getMatch(id ?? ""), [id]);
-  const [submitting, setSubmitting] = useState(false);
+  const match = useAsync(() => circularityService.getMatch(id), [id]);
+  const listing = useAsync(
+    () => (match.data ? circularityService.getListing(match.data.listingId) : Promise.resolve(null)),
+    [match.data?.listingId]
+  );
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  const requestExchange = () => {
+  const offer = async () => {
     if (!match.data) return;
-    setSubmitting(true);
-    circularityService
-      .createExchangeRequest({
-        listingId: match.data.listingId,
-        material: match.data.material,
-        kind: "request",
-      })
-      .then(() => {
-        toast("Exchange requested. You'll be notified when it's accepted.");
-        navigate("/exchange");
-      })
-      .finally(() => setSubmitting(false));
+    setSending(true);
+    await circularityService.createExchangeRequest({
+      listingId: match.data.listingId,
+      material: match.data.material,
+      kind: "offer",
+    });
+    setSending(false);
+    setConfirming(false);
+    toast(`Offer sent to ${match.data.counterparty}.`);
   };
 
-  return (
-    <AppShell active="exchange">
-      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <button
-          type="button"
-          onClick={() => navigate("/exchange")}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to exchange
-        </button>
+  const m = match.data;
+  const l = listing.data;
+  const alreadyOffered = m?.status === "Requested" || m?.status === "Accepted";
 
+  return (
+    <AppShell active="exchange" title={m?.material ?? "Match"}>
+      <PageContainer>
         {match.error ? (
           <ErrorState onRetry={match.reload} />
         ) : match.isLoading ? (
-          <SkeletonList rows={2} />
-        ) : !match.data ? (
-          <EmptyState title="Match not found." description="This exchange may no longer be available." />
+          <SkeletonList rows={3} />
+        ) : !m ? (
+          <EmptyState
+            title="This match is no longer available."
+            description="The item may have been taken or withdrawn."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/exchange">Back to Exchange</Link>
+              </Button>
+            }
+          />
         ) : (
           <>
-            <PageHeader title={match.data.material} />
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-brand-soft px-2.5 py-0.5 font-mono text-xs font-medium text-brand-forest">
-                  {match.data.matchPercent}% match
-                </span>
-                <span className="text-sm text-muted-foreground">{match.data.counterpartyType}</span>
+            <PageHeader
+              back={{ label: "Exchange", to: "/exchange" }}
+              title={m.material}
+              subtitle={`${m.counterparty} · ${m.counterpartyType}`}
+            />
+
+            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0">
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <MaterialThumb category={m.category} size="lg" className="rounded-none" />
+                </div>
+
+                {l?.description && <p className="mt-6 max-w-prose text-[15px] leading-7 text-foreground">{l.description}</p>}
+
+                <section className="mt-10" aria-labelledby="why-h">
+                  <h2 id="why-h" className="text-lg font-semibold tracking-tight text-foreground">
+                    Why this match?
+                  </h2>
+                  <ul className="mt-4 space-y-3">
+                    {m.reasons.slice(0, 3).map((r) => (
+                      <li key={r} className="flex items-start gap-3 text-[15px] text-foreground">
+                        <Check className="mt-1 h-4 w-4 shrink-0 text-brand-sage" strokeWidth={2.5} aria-hidden="true" />
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section className="mt-10" aria-labelledby="impact-h">
+                  <h2 id="impact-h" className="text-lg font-semibold tracking-tight text-foreground">
+                    Impact if reused
+                  </h2>
+                  <dl className="mt-4 grid max-w-md grid-cols-2 gap-6">
+                    <div>
+                      <dd className="font-mono text-2xl font-medium text-foreground">{m.diverted}</dd>
+                      <dt className="mt-1 text-sm text-muted-foreground">Material diverted</dt>
+                    </div>
+                    <div>
+                      <dd className="font-mono text-2xl font-medium text-foreground">
+                        {m.co2eEstimate} <span className="text-sm text-muted-foreground">kg</span>
+                      </dd>
+                      <dt className="mt-1 text-sm text-muted-foreground">
+                        CO₂e avoided
+                        <span className="block text-xs">Illustrative estimate</span>
+                      </dt>
+                    </div>
+                  </dl>
+                </section>
               </div>
 
-              <dl className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <dd className="font-mono text-foreground/80">{match.data.quantity}</dd>
-                <dd className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4 text-brand-sage" />
-                  <span className="font-mono">{match.data.distance}</span> · {match.data.counterparty}
-                </dd>
-              </dl>
-
-              <div className="mt-5">
-                <h3 className="text-sm font-medium text-foreground">Why this match?</h3>
-                <ul className="mt-2 space-y-2">
-                  {match.data.reasons.map((r) => (
-                    <li key={r} className="flex items-center gap-2 text-sm text-foreground/90">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-soft text-brand-sage">
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                      </span>
-                      {r}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <p className="mt-5 flex items-center gap-1.5 rounded-[10px] bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-                <Leaf className="h-3.5 w-3.5 text-brand-sage" />
-                Estimated <span className="font-mono text-foreground/80">{match.data.co2eEstimate} kg</span> CO₂e avoided ·{" "}
-                <span className="font-mono text-foreground/80">{match.data.diverted}</span> diverted
-              </p>
-
-              <div className="mt-6 border-t border-border/70 pt-5">
-                <Button className="gap-2" onClick={requestExchange} disabled={submitting}>
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
-                      Requesting…
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-4 w-4" />
-                      Request exchange
-                    </>
-                  )}
-                </Button>
-              </div>
+              <aside className="lg:sticky lg:top-20 lg:self-start">
+                <Card className="p-5">
+                  <p className="text-xl font-semibold tracking-tight text-foreground">{OFFER_LABEL[l?.exchangeType ?? "donation"]}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    <span className="font-mono">{m.matchPercent}%</span> match for your area
+                  </p>
+                  <Separator className="my-5" />
+                  <DetailList
+                    items={[
+                      { label: "Quantity", value: m.quantity, mono: true },
+                      { label: "Distance", value: m.distance, mono: true },
+                      { label: "Condition", value: l?.condition ?? "Good" },
+                      { label: "Area", value: l?.area ?? "Riverside" },
+                    ]}
+                  />
+                  <div className="mt-6">
+                    {alreadyOffered ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted-foreground">Offer sent</span>
+                        <StatusBadge status={m.status} />
+                      </div>
+                    ) : (
+                      <Button className="w-full" onClick={() => setConfirming(true)}>
+                        Offer material
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              </aside>
             </div>
           </>
         )}
-      </div>
+      </PageContainer>
+
+      <ConfirmationDialog
+        open={confirming}
+        title="Offer this material?"
+        description={m ? `${m.counterparty} will be notified that you'd like to hand over ${m.material.toLowerCase()} (${m.quantity}).` : undefined}
+        confirmLabel="Send offer"
+        loading={sending}
+        onConfirm={offer}
+        onCancel={() => setConfirming(false)}
+      />
     </AppShell>
   );
 };

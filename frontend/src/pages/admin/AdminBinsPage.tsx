@@ -1,65 +1,71 @@
 import React from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonCards } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
-import { StatusBadge, toneFor } from "@/components/common/StatusBadge";
+import { PriorityLabel } from "@/components/common/StatusBadge";
+import { Progress } from "@/components/ui/progress";
+import { SkeletonTable } from "@/components/ui/skeleton";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import { cn } from "@/lib/utils";
+import { binTone } from "@/lib/format";
 import type { SmartBin } from "@/lib/domain";
 import { Trash2 } from "lucide-react";
 
+/** Smart Bins — job: spot which bins to empty first. Fullest first. */
 export const AdminBinsPage: React.FC = () => {
   const bins = useAsync(() => circularityService.getSmartBins());
+  const rows = [...(bins.data ?? [])].sort((a, b) => b.fillLevel - a.fillLevel);
+
+  const columns: Column<SmartBin>[] = [
+    {
+      id: "bin",
+      header: "Bin",
+      mobile: "primary",
+      cell: (b) => (
+        <span className="block">
+          <span className="block font-medium">{b.area}</span>
+          <span className="block font-mono text-xs font-normal text-muted-foreground">{b.id.toUpperCase()}</span>
+        </span>
+      ),
+    },
+    { id: "stream", header: "Stream", cell: (b) => <span className="text-muted-foreground">{b.category}</span> },
+    {
+      id: "fill",
+      header: "Fill level",
+      mobile: "trailing",
+      className: "w-60",
+      cell: (b) => (
+        <span className="flex items-center gap-3">
+          <Progress value={b.fillLevel} label={`${b.area} fill level`} tone={binTone(b.fillLevel)} className="hidden w-32 sm:block" />
+          <span className="w-10 text-right font-mono text-sm">{b.fillLevel}%</span>
+        </span>
+      ),
+    },
+    { id: "last", header: "Last collection", cell: (b) => <span className="text-muted-foreground">{b.lastCollection}</span> },
+    {
+      id: "overflow",
+      header: "Est. overflow",
+      align: "right",
+      cell: (b) => <span className="font-mono">~{b.overflowEstimateHrs}h</span>,
+    },
+    { id: "priority", header: "Priority", mobile: "hidden", cell: (b) => <PriorityLabel priority={b.priority} /> },
+  ];
 
   return (
-    <AppShell active="bins" areaLabel="Municipality · Bins">
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <PageHeader title="Smart Bins" subtitle="Seeded demo bins — fill levels are illustrative, not live IoT data." />
-
+    <AppShell active="bins">
+      <PageContainer>
+        <PageHeader title="Smart Bins" subtitle="Fill levels and overflow estimates are seeded demo values, not live IoT data." />
         {bins.error ? (
           <ErrorState onRetry={bins.reload} />
         ) : bins.isLoading ? (
-          <SkeletonCards count={4} />
-        ) : (bins.data ?? []).length === 0 ? (
+          <SkeletonTable rows={4} />
+        ) : rows.length === 0 ? (
           <EmptyState icon={Trash2} title="No bins registered." />
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {(bins.data ?? []).map((b) => <BinCard key={b.id} bin={b} />)}
-          </div>
+          <DataTable label="Smart bins, fullest first" columns={columns} rows={rows} rowKey={(b) => b.id} />
         )}
-      </div>
+      </PageContainer>
     </AppShell>
-  );
-};
-
-const BinCard: React.FC<{ bin: SmartBin }> = ({ bin }) => {
-  const critical = bin.fillLevel >= 85;
-  return (
-    <article className="rounded-[10px] border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">{bin.area}</h3>
-          <p className="text-xs text-muted-foreground">{bin.category} · last collected {bin.lastCollection}</p>
-        </div>
-        <StatusBadge label={bin.priority} tone={toneFor(bin.priority)} />
-      </div>
-
-      {/* Fill level */}
-      <div className="mt-4">
-        <div className="mb-1.5 flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Fill level</span>
-          <span className={cn("font-mono font-medium", critical ? "text-destructive" : "text-brand-forest")}>{bin.fillLevel}%</span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-          <div className={cn("h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none", critical ? "bg-destructive" : "bg-brand-sage")} style={{ width: `${bin.fillLevel}%` }} aria-hidden="true" />
-        </div>
-      </div>
-
-      <p className="mt-3 text-xs text-muted-foreground">
-        Est. overflow in ~<span className="font-mono">{bin.overflowEstimateHrs}h</span> · illustrative estimate
-      </p>
-    </article>
   );
 };

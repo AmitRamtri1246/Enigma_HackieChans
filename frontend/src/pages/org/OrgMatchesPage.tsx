@@ -1,71 +1,80 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { Button } from "@/components/ui/button";
-import { SkeletonCards } from "@/components/ui/skeleton";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { ItemCell } from "@/components/common/DataDisplay";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { EmptyState, ErrorState } from "@/components/common/StateViews";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { SkeletonTable } from "@/components/ui/skeleton";
+import { TabsList, TabsPanel } from "@/components/ui/tabs";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
 import type { Match } from "@/lib/domain";
-import { Sparkles, MapPin, ArrowRight } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
+type Filter = "review" | "accepted";
+
+/** Matches — job: decide which listings to accept. Compare in a table, decide on the detail page. */
 export const OrgMatchesPage: React.FC = () => {
-  const navigate = useNavigate();
   const matches = useAsync(() => circularityService.getMatches());
+  const [filter, setFilter] = useState<Filter>("review");
+
+  const all = matches.data ?? [];
+  const review = all.filter((m) => m.status === "Suggested" || m.status === "Requested").sort((a, b) => b.matchPercent - a.matchPercent);
+  const accepted = all.filter((m) => m.status === "Accepted");
+  const rows = filter === "review" ? review : accepted;
+
+  const columns: Column<Match>[] = [
+    { id: "item", header: "Listing", mobile: "primary", cell: (m) => <ItemCell category={m.category} title={m.material} sub={m.counterparty} /> },
+    { id: "qty", header: "Quantity", cell: (m) => <span className="font-mono">{m.quantity}</span> },
+    { id: "dist", header: "Distance", cell: (m) => <span className="font-mono">{m.distance}</span> },
+    { id: "match", header: "Match", align: "right", cell: (m) => <span className="font-mono">{m.matchPercent}%</span> },
+    {
+      id: "status",
+      header: "Status",
+      mobile: "trailing",
+      cell: (m) =>
+        m.status === "Accepted" ? (
+          <StatusBadge status="Accepted" label="Awaiting receipt" />
+        ) : m.status === "Requested" ? (
+          <StatusBadge status="Requested" label="Offered to you" />
+        ) : (
+          <span className="text-sm text-muted-foreground">To review</span>
+        ),
+    },
+  ];
 
   return (
     <AppShell active="matches">
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <PageHeader title="Matches" subtitle="Materials that may fit your current needs." />
+      <PageContainer>
+        <PageHeader title="Matches" subtitle="Listings that fit your open needs, best fit first." />
 
-        {matches.error ? (
-          <ErrorState onRetry={matches.reload} />
-        ) : matches.isLoading ? (
-          <SkeletonCards count={6} />
-        ) : (matches.data ?? []).length === 0 ? (
-          <EmptyState
-            icon={Sparkles}
-            title="No matching materials yet."
-            description="New matches appear here when community listings fit your needs."
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(matches.data ?? []).map((m) => (
-              <MatchCard
-                key={m.id}
-                match={m}
-                onReview={() => navigate(`/org/matches/${m.id}`)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        <TabsList<Filter>
+          idBase="matches"
+          label="Match status"
+          value={filter}
+          onValueChange={setFilter}
+          items={[
+            { value: "review", label: "To review", count: review.length },
+            { value: "accepted", label: "Accepted", count: accepted.length },
+          ]}
+        />
+        <TabsPanel idBase="matches" value={filter} className="pt-6">
+          {matches.error ? (
+            <ErrorState onRetry={matches.reload} />
+          ) : matches.isLoading ? (
+            <SkeletonTable rows={3} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={Sparkles}
+              title={filter === "review" ? "No circular matches found yet." : "Nothing accepted yet."}
+              description={filter === "review" ? "New matches appear when residents list items that fit your needs." : "Accepted matches wait here until you confirm receipt."}
+            />
+          ) : (
+            <DataTable label="Matches" columns={columns} rows={rows} rowKey={(m) => m.id} rowHref={(m) => `/org/matches/${m.id}`} />
+          )}
+        </TabsPanel>
+      </PageContainer>
     </AppShell>
   );
 };
-
-const MatchCard: React.FC<{ match: Match; onReview: () => void }> = ({ match, onReview }) => (
-  <article className="flex flex-col rounded-[10px] border border-border bg-card p-4 transition-[border-color] duration-200 hover:border-brand-sage/40">
-    <div className="flex items-start justify-between gap-2">
-      <h3 className="text-sm font-semibold tracking-tight text-foreground">{match.material}</h3>
-      <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 font-mono text-[11px] font-medium text-brand-forest">
-        {match.matchPercent}% match
-      </span>
-    </div>
-    <dl className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <dd className="font-mono text-foreground/80">{match.quantity}</dd>
-      <dd className="flex items-center gap-1">
-        <MapPin className="h-3.5 w-3.5 text-brand-sage" />
-        <span className="font-mono">{match.distance}</span>
-      </dd>
-    </dl>
-    <p className="mt-1 text-xs text-muted-foreground">{match.counterparty}</p>
-    <div className="mt-4 pt-1">
-      <Button variant="outline" size="sm" className="w-full justify-center gap-1.5" onClick={onReview}>
-        Review
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  </article>
-);

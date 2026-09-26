@@ -2,37 +2,39 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+/**
+ * Restrained status badge. Soft tints only — never bright filled colors.
+ * active    → soft green   (in progress, live)
+ * pending   → soft amber   (waiting on someone)
+ * completed → sage outline (done)
+ * problem   → soft red     (cancelled, declined, overdue)
+ * neutral   → grey         (informational)
+ */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium leading-5 transition-colors",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-        secondary:
-          "border-border bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline:
-          "text-foreground border-border",
-        success:
-          "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-        muted:
-          "border-transparent bg-muted text-muted-foreground",
+        neutral: "border-transparent bg-secondary text-muted-foreground",
+        active: "border-transparent bg-brand-soft/80 text-brand-forest",
+        pending: "border-transparent bg-[#F5EFE2] text-[#7A5A1C]",
+        completed: "border-brand-sage/25 bg-transparent text-brand-sage",
+        problem: "border-transparent bg-brand-danger/10 text-[#A4463B]",
+        outline: "border-border bg-transparent text-foreground",
       },
     },
-    defaultVariants: {
-      variant: "default",
-    },
+    defaultVariants: { variant: "neutral" },
   }
 );
 
+export type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
+
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
+  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };

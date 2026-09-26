@@ -1,86 +1,107 @@
 import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { PageHeader } from "@/components/common/PageHeader";
-import { SkeletonList } from "@/components/ui/skeleton";
-import { EmptyState, ErrorState } from "@/components/common/StateViews";
-import { StatusBadge, toneFor } from "@/components/common/StatusBadge";
+import { PageContainer, PageHeader } from "@/components/common/PageHeader";
+import { DetailList, MaterialThumb } from "@/components/common/DataDisplay";
 import { JourneyTimeline } from "@/components/common/JourneyTimeline";
+import { EmptyState, ErrorState } from "@/components/common/StateViews";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { useAsync } from "@/lib/use-async";
 import { circularityService } from "@/lib/circularity-service";
-import { ArrowLeft, FileText, Leaf } from "lucide-react";
+import { FileText } from "lucide-react";
 
+/** Passport detail — the material's journey is the page; impact appears only once complete. */
 export const PassportDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const passport = useAsync(() => circularityService.getWastePassport(id ?? ""), [id]);
-
-  const completed = passport.data?.currentStage === "Completed";
+  const { id = "" } = useParams<{ id: string }>();
+  const passport = useAsync(() => circularityService.getWastePassport(id), [id]);
+  const p = passport.data;
+  const completed = p?.currentStage === "Completed";
 
   return (
-    <AppShell active="passports" areaLabel="Citizen · Passports">
-      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-        <button
-          type="button"
-          onClick={() => navigate("/passports")}
-          className="mb-5 inline-flex items-center gap-1.5 rounded px-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Passports
-        </button>
-
+    <AppShell active="passports" title={p ? `Passport · ${p.material}` : "Waste Passport"}>
+      <PageContainer>
         {passport.error ? (
           <ErrorState onRetry={passport.reload} />
         ) : passport.isLoading ? (
           <SkeletonList rows={4} />
-        ) : !passport.data ? (
-          <EmptyState icon={FileText} title="Passport not found." action={<Button variant="outline" onClick={() => navigate("/passports")}>All passports</Button>} />
+        ) : !p ? (
+          <EmptyState
+            icon={FileText}
+            title="Passport not found."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/passports">All passports</Link>
+              </Button>
+            }
+          />
         ) : (
           <>
             <PageHeader
-              title={passport.data.material}
-              subtitle={`Waste Passport · ${passport.data.quantity} · ${passport.data.owner}`}
-              action={<StatusBadge label={passport.data.currentStage} tone={toneFor(passport.data.currentStage)} />}
+              back={{ label: "Waste Passports", to: "/passports" }}
+              title={p.material}
+              meta={<StatusBadge status={p.currentStage} />}
+              subtitle={
+                <>
+                  Passport <span className="font-mono text-[13px]">{p.id.toUpperCase()}</span>
+                </>
+              }
             />
 
-            {/* Journey timeline */}
-            <section className="rounded-[10px] border border-border bg-card p-5">
-              <h2 className="mb-5 text-sm font-semibold tracking-tight text-foreground">Material journey</h2>
-              <JourneyTimeline events={passport.data.timeline} />
-            </section>
+            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <section aria-labelledby="journey-h" className="min-w-0">
+                <h2 id="journey-h" className="mb-6 text-lg font-semibold tracking-tight text-foreground">
+                  Material journey
+                </h2>
+                <JourneyTimeline events={p.timeline} />
+              </section>
 
-            {/* Impact — only meaningful once completed */}
-            <section className="mt-6 rounded-[10px] border border-border bg-card p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Leaf className="h-4 w-4 text-brand-sage" />
-                <h2 className="text-sm font-semibold tracking-tight text-foreground">Impact</h2>
-              </div>
-              {completed ? (
-                <dl className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dd className="font-mono text-xl font-medium text-brand-forest">{passport.data.diverted}</dd>
-                    <dt className="mt-0.5 text-xs text-muted-foreground">Material diverted</dt>
-                  </div>
-                  <div>
-                    <dd className="font-mono text-xl font-medium text-brand-forest">{passport.data.co2eEstimate} kg</dd>
-                    <dt className="mt-0.5 text-xs text-muted-foreground">CO₂e avoided · illustrative estimate</dt>
-                  </div>
-                  {passport.data.outcome && (
-                    <div className="col-span-2">
-                      <dd className="text-sm font-medium text-foreground">Outcome: {passport.data.outcome}</dd>
+              <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+                <Card className="p-5">
+                  <div className="flex items-center gap-3">
+                    <MaterialThumb category={p.category} size="md" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{p.material}</p>
+                      <p className="text-[13px] text-muted-foreground">{p.category}</p>
                     </div>
+                  </div>
+                  <Separator className="my-5" />
+                  <DetailList
+                    items={[
+                      { label: "Quantity", value: p.quantity, mono: true },
+                      { label: "Listed by", value: p.owner },
+                      { label: "Outcome", value: p.outcome ?? "—" },
+                    ]}
+                  />
+
+                  <Separator className="my-5" />
+                  <h3 className="text-sm font-medium text-foreground">Impact</h3>
+                  {completed ? (
+                    <dl className="mt-3 grid grid-cols-2 gap-4">
+                      <div>
+                        <dd className="font-mono text-xl font-medium text-foreground">{p.diverted}</dd>
+                        <dt className="mt-0.5 text-[13px] text-muted-foreground">Diverted</dt>
+                      </div>
+                      <div>
+                        <dd className="font-mono text-xl font-medium text-foreground">
+                          {p.co2eEstimate} <span className="text-sm text-muted-foreground">kg</span>
+                        </dd>
+                        <dt className="mt-0.5 text-[13px] text-muted-foreground">CO₂e avoided</dt>
+                      </div>
+                      <p className="col-span-2 text-xs text-muted-foreground">Illustrative estimate, not a verified measurement.</p>
+                    </dl>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">Impact is recorded once the journey is complete.</p>
                   )}
-                </dl>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Impact will be shown once this material's journey is complete.
-                </p>
-              )}
-            </section>
+                </Card>
+              </aside>
+            </div>
           </>
         )}
-      </div>
+      </PageContainer>
     </AppShell>
   );
 };

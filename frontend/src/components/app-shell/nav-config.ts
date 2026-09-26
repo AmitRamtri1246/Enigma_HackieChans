@@ -7,10 +7,9 @@ import {
   Map,
   Package,
   FileText,
-  Building2,
   Inbox,
   Sparkles,
-  Truck,
+  ClipboardCheck,
   ClipboardList,
   History,
   LayoutDashboard,
@@ -36,13 +35,13 @@ export interface NavGroup {
 
 /** Full navigation description for one role. */
 export interface RoleNav {
-  /** Short label shown in the top bar demo pill, e.g. "Citizen". */
+  /** Role name shown before the page title in the top bar. */
   areaLabel: string;
   /** The route this role lands on (used by the role switcher). */
   home: string;
   /** Sidebar groups (desktop). */
   groups: NavGroup[];
-  /** Primary destinations on the mobile bottom nav. */
+  /** Primary destinations on the mobile bottom nav (3–4 max). */
   mobile: NavItem[];
 }
 
@@ -51,7 +50,6 @@ const CITIZEN: RoleNav = {
   home: "/app",
   groups: [
     {
-      heading: "Overview",
       items: [
         { id: "home", label: "Home", icon: Home, path: "/app" },
         { id: "scan", label: "Scan", icon: ScanLine, path: "/scan" },
@@ -78,19 +76,21 @@ const CITIZEN: RoleNav = {
     { id: "home", label: "Home", icon: Home, path: "/app" },
     { id: "exchange", label: "Exchange", icon: Repeat, path: "/exchange" },
     { id: "scan", label: "Scan", icon: ScanLine, path: "/scan" },
+    { id: "listings", label: "Listings", icon: Package, path: "/listings" },
     { id: "impact", label: "Impact", icon: Leaf, path: "/impact" },
   ],
 };
 
 const ORGANIZATION: RoleNav = {
-  areaLabel: "Organization",
+  areaLabel: "EcoPack",
   home: "/org",
   groups: [
     {
-      heading: "Overview",
       items: [
         { id: "home", label: "Home", icon: Home, path: "/org" },
-        { id: "impact", label: "Impact", icon: Leaf, path: "/impact" },
+        { id: "needs", label: "Material Needs", icon: Inbox, path: "/org/needs" },
+        { id: "matches", label: "Matches", icon: Sparkles, path: "/org/matches" },
+        { id: "receipts", label: "Receipts", icon: ClipboardCheck, path: "/org/receipts" },
       ],
     },
     {
@@ -101,23 +101,18 @@ const ORGANIZATION: RoleNav = {
       ],
     },
     {
-      heading: "Workspace",
+      heading: "Records",
       items: [
-        { id: "needs", label: "Needs", icon: Inbox, path: "/org/needs" },
-        { id: "matches", label: "Matches", icon: Sparkles, path: "/org/matches" },
-        { id: "receipts", label: "Receipts", icon: Building2, path: "/org/receipts" },
+        { id: "passports", label: "Waste Passports", icon: FileText, path: "/passports" },
+        { id: "impact", label: "Impact", icon: Leaf, path: "/impact" },
       ],
-    },
-    {
-      heading: "Management",
-      items: [{ id: "passports", label: "Waste Passports", icon: FileText, path: "/passports" }],
     },
   ],
   mobile: [
     { id: "home", label: "Home", icon: Home, path: "/org" },
     { id: "needs", label: "Needs", icon: Inbox, path: "/org/needs" },
     { id: "matches", label: "Matches", icon: Sparkles, path: "/org/matches" },
-    { id: "receipts", label: "Receipts", icon: Building2, path: "/org/receipts" },
+    { id: "receipts", label: "Receipts", icon: ClipboardCheck, path: "/org/receipts" },
   ],
 };
 
@@ -126,10 +121,9 @@ const COLLECTOR: RoleNav = {
   home: "/collector",
   groups: [
     {
-      heading: "Workspace",
       items: [
         { id: "tasks", label: "Tasks", icon: ClipboardList, path: "/collector" },
-        { id: "history", label: "History", icon: History, path: "/collector?tab=history" },
+        { id: "history", label: "Delivered", icon: History, path: "/collector?tab=delivered" },
       ],
     },
     {
@@ -139,31 +133,28 @@ const COLLECTOR: RoleNav = {
   ],
   mobile: [
     { id: "tasks", label: "Tasks", icon: ClipboardList, path: "/collector" },
-    { id: "current", label: "Current", icon: Truck, path: "/collector" },
+    { id: "history", label: "Delivered", icon: History, path: "/collector?tab=delivered" },
     { id: "circular-map", label: "Map", icon: Map, path: "/map" },
   ],
 };
 
 const MUNICIPALITY: RoleNav = {
-  areaLabel: "Municipality",
+  areaLabel: "Riverside",
   home: "/admin",
   groups: [
     {
-      heading: "Overview",
       items: [
         { id: "overview", label: "Overview", icon: LayoutDashboard, path: "/admin" },
-      ],
-    },
-    {
-      heading: "Workspace",
-      items: [
         { id: "tasks", label: "Collection Tasks", icon: ClipboardList, path: "/admin/tasks" },
         { id: "bins", label: "Smart Bins", icon: Trash2, path: "/admin/bins" },
       ],
     },
     {
       heading: "Community",
-      items: [{ id: "circular-map", label: "Circular Map", icon: Map, path: "/map" }],
+      items: [
+        { id: "circular-map", label: "Circular Map", icon: Map, path: "/map" },
+        { id: "passports", label: "Waste Passports", icon: FileText, path: "/passports" },
+      ],
     },
   ],
   mobile: [
@@ -180,3 +171,12 @@ export const ROLE_NAV: Record<TraceRole, RoleNav> = {
   collector: COLLECTOR,
   municipality: MUNICIPALITY,
 };
+
+/** Find the label of a nav item for the current role (used for the top-bar title). */
+export function navLabel(role: TraceRole, id: string): string | undefined {
+  for (const g of ROLE_NAV[role].groups) {
+    const hit = g.items.find((i) => i.id === id);
+    if (hit) return hit.label;
+  }
+  return undefined;
+}
